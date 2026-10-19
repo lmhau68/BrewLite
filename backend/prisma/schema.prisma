@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String
+  loyaltyPoints Int       @default(0)
+  orders        Order[]
+}
+
+model Product {
+  id          Int          @id @default(autoincrement())
+  name        String
+  price       Float
+  imageUrl    String
+  stock       Int
+  orderItems  OrderItem[]
+}
+
+model Order {
+  id          Int          @id @default(autoincrement())
+  userId      Int?         // Cho phép khách vãng lai (null)
+  status      OrderStatus  @default(PENDING) // Ép dùng đúng Enum ở đây nha ông!
+  total       Float
+  createdAt   DateTime     @default(now())
+  
+  user        User?        @relation(fields: [userId], references: [id])
+  items       OrderItem[]
+  payment     Payment?
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  productId   Int
+  size        String   // S, M, L
+  qty         Int
+  lineTotal   Float
+  
+  order       Order    @relation(fields: [orderId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id             Int      @id @default(autoincrement())
+  orderId        Int      @unique
+  idempotencyKey String   @unique // Khóa chống thanh toán trùng lặp
+  amount         Float
+  method         String   // VI_DIEN_TU hoặc THE_NGAN_HANG
+  
+  order          Order    @relation(fields: [orderId], references: [id])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+  PAYMENT_FAILED
+  CANCELLED
+}
