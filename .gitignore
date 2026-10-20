@@ -9,3 +9,9 @@ node_modules/
 .vscode/
 dist/
 build/
+
+# Giữ lại file mẫu, bỏ qua mọi file env thật
+.env.*
+!.env.example
+coverage/
+*.log
