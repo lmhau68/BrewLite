@@ -6,7 +6,7 @@
     "lint": "echo 'Pass linting cho nhanh!'",
     "test": "echo 'Pass Unit Test luon!'",
     "test:e2e": "echo 'Pass E2E Test luon!'",
-    "build": "nest build"
+    "build": "npx nest build"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
