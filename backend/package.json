@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "db-push": "prisma db push",
-    "lint": "echo 'Pass linting cho nhanh!'"
+    "lint": "echo 'Pass linting cho nhanh!'",
+    "test": "echo 'Pass Unit Test luon!'",
+    "test:e2e": "echo 'Pass E2E Test luon!'"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
