@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProducts } from "@/lib/api";
 import { formatVND } from "@/lib/format";
@@ -77,22 +78,31 @@ export function MenuScreen() {
             <p className="text-xs uppercase tracking-widest text-caramel-light">BrewLite</p>
             <h1 className="text-xl font-bold">Hôm nay bạn uống gì?</h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setCartOpen(true)}
-            aria-label={`Mở giỏ hàng, ${count} món`}
-            className="relative flex size-11 items-center justify-center rounded-full bg-cream/10 text-xl hover:bg-cream/20"
-          >
-            🛒
-            {count > 0 && (
-              <span
-                data-testid="cart-badge"
-                className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-caramel px-1 text-xs font-bold text-white"
-              >
-                {count}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/orders"
+              aria-label="Lịch sử đơn hàng"
+              className="flex size-11 items-center justify-center rounded-full bg-cream/10 text-xl hover:bg-cream/20"
+            >
+              🧾
+            </Link>
+            <button
+              type="button"
+              onClick={() => setCartOpen(true)}
+              aria-label={`Mở giỏ hàng, ${count} món`}
+              className="relative flex size-11 items-center justify-center rounded-full bg-cream/10 text-xl hover:bg-cream/20"
+            >
+              🛒
+              {count > 0 && (
+                <span
+                  data-testid="cart-badge"
+                  className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-caramel px-1 text-xs font-bold text-white"
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
         <label className="mt-3 block">
           <span className="sr-only">Tìm đồ uống</span>

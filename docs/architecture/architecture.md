@@ -53,11 +53,11 @@ flowchart TB
 
 | Lớp | Thư mục | Ví dụ |
 |---|---|---|
-| Presentation (route) | `app/` | `page.tsx`, `layout.tsx`, `globals.css` |
-| UI components | `components/` | `MenuScreen`, `ProductCard`, `ProductSheet`, `CartSheet`, `MenuStates` |
-| State | `components/CartProvider.tsx`, `lib/cart.ts` | Giỏ hàng (reducer thuần, lưu `localStorage`) |
-| Data access | `lib/api.ts` | `getProducts`, `getProduct` – dùng mock khi chưa có `NEXT_PUBLIC_API_URL` |
-| Domain/util | `lib/types.ts`, `lib/format.ts`, `lib/menu-options.ts` | Kiểu dữ liệu, định dạng VND, size/topping |
+| Presentation (route) | `app/` | `page.tsx` (menu), `checkout/page.tsx`, `orders/page.tsx`, `orders/[id]/page.tsx`, `layout.tsx`, `globals.css` |
+| UI components | `components/` | `MenuScreen`, `ProductCard`, `ProductSheet`, `CartSheet`, `MenuStates`, `CheckoutScreen`, `OrdersScreen`, `OrderDetailScreen`, `OrderLines`, `OrderStatusBadge`, `SubPageHeader` |
+| State | `components/CartProvider.tsx`, `components/OrdersProvider.tsx`, `lib/cart.ts` | Giỏ hàng (reducer thuần, lưu `localStorage`) và danh sách đơn (đặt/thanh toán/đồng bộ trạng thái) |
+| Data access | `lib/api.ts` | `getProducts`, `getProduct`, `createOrder`, `getOrders`, `getOrder`, `payOrder` – dùng mock khi chưa có `NEXT_PUBLIC_API_URL` |
+| Domain/util | `lib/types.ts`, `lib/orders.ts`, `lib/format.ts`, `lib/menu-options.ts` | Kiểu dữ liệu, nghiệp vụ đơn (tính tiền, validate, idempotency key), định dạng VND, size/topping |
 
 ### 4.2 Backend (`backend/brew-lite/src`) – module theo domain
 
@@ -66,8 +66,8 @@ flowchart TB
 | `products` | ✅ Sprint 1 | `GET /products`, `GET /products/:id` (+ lọc `category`, `q`) |
 | `health` | ✅ Sprint 1 | `GET /health` |
 | `auth` | Sprint 2 | Đăng ký/đăng nhập, JWT guard |
-| `orders` | Sprint 2 | Tạo đơn trong transaction, trừ tồn kho, trạng thái đơn |
-| `payments` | Sprint 2 | Thanh toán Ví/Thẻ mô phỏng, idempotency key |
+| `orders` | Sprint 2 – phía backend | Tạo đơn trong transaction, trừ tồn kho, trạng thái đơn. Giao diện gọi `POST /orders`, `GET /orders`, `GET /orders/:id`. |
+| `payments` | Sprint 2 – phía backend | Thanh toán Ví/Thẻ mô phỏng, idempotency key (`POST /payments`) |
 
 Mỗi module gồm `controller` (HTTP) → `service` (nghiệp vụ) → truy cập dữ liệu (Prisma ở Sprint 2). Controller không chứa nghiệp vụ.
 

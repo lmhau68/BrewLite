@@ -23,7 +23,11 @@ Công nghệ: Next.js (PWA) · NestJS · PostgreSQL · Docker.
 | Trạng thái loading / empty / error | ✅ |
 | Dữ liệu mẫu (frontend mock + API seed) | ✅ |
 | Unit/component test, CI (Install → Lint → Test → Build) | ✅ |
-| Đăng nhập, đặt đơn, thanh toán, theo dõi đơn | Sprint 2 |
+| Xác nhận đơn (`/checkout`): thông tin người nhận → tạo đơn → thanh toán mô phỏng | ✅ |
+| Theo dõi đơn (`/orders`, `/orders/[id]`): lịch sử, chi tiết, thanh toán lại | ✅ |
+| Đăng nhập / JWT | Sprint 2 |
+
+> Các màn hình `/checkout` và `/orders` chạy được bằng dữ liệu giả (không cần API). Khi bật `NEXT_PUBLIC_API_URL`, giao diện gọi `POST /orders`, `GET /orders`, `GET /orders/:id`, `POST /payments` — phía API do nhóm backend phụ trách.
 
 ## Chạy local (VS Code)
 
@@ -38,6 +42,8 @@ npm run dev          # http://localhost:3000
 ```
 
 Xem thử các trạng thái: `http://localhost:3000/?state=error` và `?state=empty`.
+
+Các màn hình chính: `/` (menu), `/checkout` (xác nhận đơn + thanh toán), `/orders` (lịch sử đơn), `/orders/[id]` (chi tiết đơn).
 
 ### Cách 2 – Frontend + API thật
 
