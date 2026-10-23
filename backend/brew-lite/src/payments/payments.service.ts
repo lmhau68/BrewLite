@@ -3,8 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreatePaymentDto } from './dto/create-payment.dto';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { OrderStatus } from '@prisma/client';
 
 @Injectable()
