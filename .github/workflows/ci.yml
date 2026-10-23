@@ -37,14 +37,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: backend/brew-lite
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: backend/brew-lite/package-lock.json
       - name: Install
         run: npm ci
       - name: Generate Prisma Client
