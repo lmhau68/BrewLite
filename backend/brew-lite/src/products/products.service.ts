@@ -1,28 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { CategoryId, Product } from './product.entity.js';
-import { PRODUCTS_SEED } from './products.seed.js';
-
-export interface ProductFilter {
-  category?: CategoryId;
-  q?: string;
-}
+import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
 export class ProductsService {
-  private readonly products: Product[] = PRODUCTS_SEED;
+  constructor(private prisma: PrismaService) {}
 
-  findAll(filter: ProductFilter = {}): Product[] {
-    const q = filter.q?.trim().toLowerCase();
-    return this.products.filter(
-      (p) =>
-        (!filter.category || p.category === filter.category) &&
-        (!q || p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)),
-    );
+  async findAll() {
+    return this.prisma.product.findMany();
   }
 
-  findOne(id: number): Product {
-    const product = this.products.find((p) => p.id === id);
-    if (!product) throw new NotFoundException(`Product ${id} not found`);
+  async findOne(id: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+    });
+    if (!product) {
+      throw new NotFoundException(`Không tìm thấy sản phẩm với ID: ${id}`);
+    }
     return product;
   }
 }
