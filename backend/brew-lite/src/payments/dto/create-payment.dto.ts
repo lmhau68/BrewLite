@@ -1,16 +1,30 @@
-import { IsInt, IsNotEmpty, IsString, IsNumber, IsIn, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  IsIn,
+  IsOptional,
+  IsBoolean,
+  Min,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreatePaymentDto {
   @IsInt({ message: 'orderId phải là số nguyên' })
   @IsNotEmpty({ message: 'orderId không được để trống' })
   orderId!: number;
 
+  @IsOptional()
   @IsString({ message: 'idempotencyKey phải là chuỗi ký tự' })
-  @IsNotEmpty({ message: 'idempotencyKey không được để trống (chống thanh toán trùng lặp)' })
-  idempotencyKey!: string;
+  @MinLength(1)
+  @MaxLength(255)
+  idempotencyKey?: string;
 
   @IsNumber({}, { message: 'amount phải là số tiền hợp lệ' })
   @IsNotEmpty({ message: 'amount không được để trống' })
+  @Min(0.01)
   amount!: number;
 
   @IsString({ message: 'method phải là chuỗi' })

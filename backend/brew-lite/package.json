@@ -19,9 +19,10 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "test": "echo 'Pass Unit Test luon!'",
-    "test:e2e": "echo 'Pass E2E Test luon!'"  
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -58,5 +59,11 @@
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
     "vitest": "^4.1.2"
+  },
+  "allowScripts": {
+    "@prisma/client@5.11.0": true,
+    "@prisma/engines@5.11.0": true,
+    "bcrypt@6.0.0": true,
+    "prisma@5.11.0": true
   }
 }

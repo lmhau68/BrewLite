@@ -1,4 +1,16 @@
-import { IsInt, IsNotEmpty, IsString, IsIn, Min, IsArray, ValidateNested, IsOptional } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  IsIn,
+  Min,
+  IsArray,
+  ValidateNested,
+  IsOptional,
+  MaxLength,
+  IsNumber,
+  MinLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
@@ -15,6 +27,8 @@ export class CreateOrderItemDto {
   qty!: number;
 
   @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
   price?: number;
 }
 
@@ -27,5 +41,11 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items!: CreateOrderItemDto[];
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  promotionCode?: string;
 }
 
