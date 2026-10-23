@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BrewLite – Web (Next.js 16, mobile-first PWA)
 
-## Getting Started
+Giao diện đặt đồ uống: **Xem menu → Chọn size/topping → Giỏ hàng → Xác nhận đơn → Thanh toán → Theo dõi đơn**.
 
-First, run the development server:
+## Chạy local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mặc định dùng **dữ liệu giả** (đơn lưu trong `localStorage`) nên không cần backend.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Dùng API thật (NestJS + PostgreSQL)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cd ../../backend/brew-lite
+npm install
+npm run start:dev          # http://localhost:4000
+```
 
-## Learn More
+```bash
+cd frontend/brewlite
+echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > .env.local
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Các endpoint giao diện dùng: `GET /products`, `GET /products/:id`, `POST /orders`, `GET /orders`, `GET /orders/:id`, `POST /payments`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Route
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Route | Nội dung |
+|---|---|
+| `/` | Menu: tìm kiếm, danh mục, chi tiết món (size/topping), giỏ hàng |
+| `/checkout` | Xác nhận đơn: thông tin người nhận → chọn cách thanh toán → kết quả |
+| `/orders` | Lịch sử đơn hàng (loading / empty / error, nút làm mới) |
+| `/orders/[id]` | Chi tiết đơn: món, tổng tiền, trạng thái, thanh toán lại nếu đơn chưa thành công |
 
-## Deploy on Vercel
+## Cấu trúc mã nguồn
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Thư mục | Nội dung |
+|---|---|
+| `app/` | Route của Next.js (App Router) |
+| `components/` | Màn hình và UI: `MenuScreen`, `CheckoutScreen`, `OrdersScreen`, `OrderDetailScreen`, `CartSheet`, `ProductSheet` |
+| `components/CartProvider.tsx`, `components/OrdersProvider.tsx` | State giỏ hàng và danh sách đơn (dùng chung cho mọi route) |
+| `lib/api.ts` | Lớp truy cập dữ liệu: gọi API nếu có `NEXT_PUBLIC_API_URL`, ngược lại dùng mock |
+| `lib/orders.ts` | Logic nghiệp vụ đơn hàng: tính tiền, validate, khoá idempotency, nhãn hiển thị |
+| `lib/cart.ts`, `lib/menu-options.ts`, `lib/format.ts` | Giỏ hàng (reducer thuần), size/topping, định dạng VND |
+| `tests/` | Test Vitest + Testing Library |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Kiểm thử
+
+```bash
+npm run lint
+npm test
+npm run typecheck
+npm run build
+```
+
+Demo trạng thái lỗi/rỗng của menu (chỉ khi dùng dữ liệu giả):
+`http://localhost:3000/?state=error` và `?state=empty`.

@@ -17,27 +17,46 @@ const STORAGE_KEY = "brewlite.cart.v1";
 export function CartProvider({ children }: { children: ReactNode }) {
   const [lines, dispatch] = useReducer(cartReducer, []);
   const hydrated = useRef(false);
+  /** Giỏ vừa nạp từ localStorage - chờ state áp dụng xong mới được ghi lại */
+  const pendingHydrate = useRef<CartLine[] | null>(null);
+  /** Chỉ ghi xuống localStorage sau khi đã nạp xong, tránh ghi đè dữ liệu cũ */
+  const canPersist = useRef(false);
 
-  // Lưu giỏ hàng (khai báo trước effect nạp để lần chạy đầu bị bỏ qua, không ghi đè dữ liệu cũ)
+  // Nạp giỏ hàng từ localStorage sau khi mount (tránh lệch hydration)
   useEffect(() => {
-    if (!hydrated.current) return;
+    if (hydrated.current) return;
+    hydrated.current = true;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as CartLine[];
+        pendingHydrate.current = parsed;
+        dispatch({ type: "hydrate", lines: parsed });
+        return;
+      }
+    } catch {
+      /* dữ liệu hỏng -> bỏ qua */
+    }
+    canPersist.current = true;
+  }, []);
+
+  // State đã khớp với dữ liệu vừa nạp -> cho phép ghi xuống localStorage
+  useEffect(() => {
+    if (pendingHydrate.current && lines === pendingHydrate.current) {
+      pendingHydrate.current = null;
+      canPersist.current = true;
+    }
+  }, [lines]);
+
+  // Lưu giỏ hàng
+  useEffect(() => {
+    if (!canPersist.current) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
     } catch {
       /* private mode / đầy bộ nhớ -> bỏ qua */
     }
   }, [lines]);
-
-  // Nạp giỏ hàng từ localStorage sau khi mount (tránh lệch hydration)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) dispatch({ type: "hydrate", lines: JSON.parse(raw) as CartLine[] });
-    } catch {
-      /* dữ liệu hỏng -> bỏ qua */
-    }
-    hydrated.current = true;
-  }, []);
 
   const value = useMemo(
     () => ({ lines, count: cartCount(lines), total: cartTotal(lines), dispatch }),

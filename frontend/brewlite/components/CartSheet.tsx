@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { formatVND } from "@/lib/format";
 import { useCart } from "./CartProvider";
 import { Sheet } from "./Sheet";
 
 export function CartSheet({ onClose }: { onClose: () => void }) {
   const { lines, total, count, dispatch } = useCart();
-  const [notice, setNotice] = useState(false);
 
   return (
     <Sheet
@@ -20,18 +19,13 @@ export function CartSheet({ onClose }: { onClose: () => void }) {
               <span className="text-muted">Tạm tính</span>
               <span className="text-lg font-bold text-espresso">{formatVND(total)}</span>
             </div>
-            {notice && (
-              <p role="status" className="rounded-lg bg-cream p-2 text-center text-sm text-muted">
-                Chức năng đặt đơn & thanh toán sẽ có ở Sprint 2.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => setNotice(true)}
-              className="w-full rounded-full bg-espresso py-3 font-semibold text-cream hover:bg-caramel-dark"
+            {/* Điều hướng làm MenuScreen unmount nên sheet tự đóng, không cần onClick */}
+            <Link
+              href="/checkout"
+              className="block w-full rounded-full bg-espresso py-3 text-center font-semibold text-cream hover:bg-caramel-dark"
             >
               Đặt đơn
-            </button>
+            </Link>
           </div>
         )
       }
