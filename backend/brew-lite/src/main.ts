@@ -11,4 +11,4 @@ async function bootstrap() {
   await app.listen(3000);
   console.log(`🚀 BrewLite Backend đang chạy tại: http://localhost:3000`);
 }
-bootstrap();
+void bootstrap();
