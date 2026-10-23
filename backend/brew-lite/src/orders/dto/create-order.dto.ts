@@ -8,7 +8,6 @@ import {
   ValidateNested,
   IsOptional,
   MaxLength,
-  IsNumber,
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -25,11 +24,6 @@ export class CreateOrderItemDto {
   @IsInt({ message: 'Số lượng phải là số nguyên' })
   @Min(1, { message: 'Số lượng phải lớn hơn hoặc bằng 1' })
   qty!: number;
-
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  price?: number;
 }
 
 export class CreateOrderDto {

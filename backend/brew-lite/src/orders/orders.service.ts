@@ -9,12 +9,12 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 
 const transitions: Record<OrderStatus, readonly OrderStatus[]> = {
-  PENDING: [OrderStatus.PAID, OrderStatus.PAYMENT_FAILED, OrderStatus.CANCELLED],
-  PAID: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
-  PREPARING: [OrderStatus.READY, OrderStatus.CANCELLED],
+  PENDING: [OrderStatus.PAYMENT_FAILED, OrderStatus.CANCELLED],
+  PAID: [OrderStatus.PREPARING],
+  PREPARING: [OrderStatus.READY],
   READY: [OrderStatus.COMPLETED],
   COMPLETED: [],
-  PAYMENT_FAILED: [OrderStatus.PAID, OrderStatus.CANCELLED],
+  PAYMENT_FAILED: [OrderStatus.CANCELLED],
   CANCELLED: [],
 };
 
@@ -113,7 +113,7 @@ export class OrdersService {
             }
           }
 
-          return tx.order.create({
+          const order = await tx.order.create({
             data: {
               userId: dto.userId ?? null,
               status: OrderStatus.PENDING,
@@ -124,6 +124,7 @@ export class OrdersService {
             },
             include: { items: { include: { product: true } }, payments: true },
           });
+          return { message: 'Tạo đơn hàng thành công (chờ thanh toán)', order };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
@@ -139,20 +140,54 @@ export class OrdersService {
     if (nextStatus === OrderStatus.PAID) {
       throw new BadRequestException('Đơn chỉ chuyển sang PAID sau khi thanh toán thành công');
     }
-    const order = await this.prisma.order.findUnique({ where: { id } });
-    if (!order) throw new NotFoundException(`Không tìm thấy đơn hàng với ID: ${id}`);
-    if (!transitions[order.status].includes(nextStatus)) {
-      throw new BadRequestException(
-        `Không thể chuyển đơn hàng từ ${order.status} sang ${nextStatus}`,
-      );
-    }
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          const order = await tx.order.findUnique({ where: { id }, include: { items: true } });
+          if (!order) throw new NotFoundException(`Không tìm thấy đơn hàng với ID: ${id}`);
+          if (!transitions[order.status].includes(nextStatus)) {
+            throw new BadRequestException(
+              `Không thể chuyển đơn hàng từ ${order.status} sang ${nextStatus}`,
+            );
+          }
 
-    const updated = await this.prisma.order.updateMany({
-      where: { id, status: order.status, version: order.version },
-      data: { status: nextStatus, version: { increment: 1 } },
-    });
-    if (updated.count !== 1) {
-      throw new ConflictException('Trạng thái đơn hàng vừa được cập nhật, vui lòng tải lại');
+          const updated = await tx.order.updateMany({
+            where: { id, status: order.status, version: order.version },
+            data: { status: nextStatus, version: { increment: 1 } },
+          });
+          if (updated.count !== 1) {
+            throw new ConflictException('Trạng thái đơn hàng vừa được cập nhật, vui lòng tải lại');
+          }
+
+          if (nextStatus === OrderStatus.CANCELLED) {
+            const quantities = new Map<number, number>();
+            for (const item of order.items) {
+              quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.qty);
+            }
+            for (const [productId, qty] of quantities) {
+              const released = await tx.product.updateMany({
+                where: { id: productId },
+                data: { stock: { increment: qty }, version: { increment: 1 } },
+              });
+              if (released.count !== 1) {
+                throw new ConflictException('Không thể hoàn lại tồn kho cho đơn hàng');
+              }
+            }
+            if (order.discountCode) {
+              await tx.promotion.updateMany({
+                where: { code: order.discountCode, usedCount: { gt: 0 } },
+                data: { usedCount: { decrement: 1 } },
+              });
+            }
+          }
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        throw new ConflictException('Đơn hàng vừa được cập nhật, vui lòng tải lại');
+      }
+      throw error;
     }
     return this.findOne(id);
   }

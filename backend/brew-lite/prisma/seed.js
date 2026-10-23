@@ -14,7 +14,7 @@ try {
   for (const product of products) {
     await prisma.product.upsert({
       where: { id: product.id },
-      update: { ...product, imageUrl: '' },
+      update: { name: product.name, price: product.price, imageUrl: '' },
       create: { ...product, imageUrl: '' },
     });
   }
@@ -26,7 +26,6 @@ try {
       maxDiscount: 30000,
       minimumSubtotal: 0,
       active: true,
-      usedCount: 0,
     },
     create: {
       code: 'WELCOME10',

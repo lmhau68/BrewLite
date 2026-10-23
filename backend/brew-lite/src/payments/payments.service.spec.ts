@@ -20,16 +20,17 @@ describe('PaymentsService', () => {
       status: PaymentStatus.SUCCEEDED,
       order: { status: OrderStatus.PAID },
     };
+    const transaction = vi.fn();
     const prisma = {
       payment: { findUnique: vi.fn().mockResolvedValue(savedPayment) },
-      $transaction: vi.fn(),
+      $transaction: transaction,
     } as unknown as PrismaService;
     const service = new PaymentsService(prisma);
 
     const result = await service.processPayment(dto, 'charge-41');
 
     expect(result).toMatchObject({ success: true, isIdempotent: true, orderStatus: OrderStatus.PAID });
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it('rejects reusing a key with a different payment request', async () => {
@@ -49,6 +50,26 @@ describe('PaymentsService', () => {
 
     await expect(
       service.processPayment({ ...dto, amount: dto.amount + 1000 }, 'charge-41'),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects reusing a key when the requested mock outcome changes', async () => {
+    const prisma = {
+      payment: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 8,
+          orderId: dto.orderId,
+          amount: dto.amount,
+          method: dto.method,
+          status: PaymentStatus.SUCCEEDED,
+          order: { status: OrderStatus.PAID },
+        }),
+      },
+    } as unknown as PrismaService;
+    const service = new PaymentsService(prisma);
+
+    await expect(
+      service.processPayment({ ...dto, mockSuccess: false }, 'charge-41'),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -86,6 +107,42 @@ describe('PaymentsService', () => {
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 7 },
       data: { loyaltyPoints: { increment: 3 } },
+    });
+  });
+
+  it('returns the persisted failure details for a declined mock payment', async () => {
+    const tx = {
+      order: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: dto.orderId,
+          userId: null,
+          total: dto.amount,
+          version: 0,
+          status: OrderStatus.PENDING,
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      payment: {
+        create: vi.fn().mockResolvedValue({ id: 3 }),
+        update: vi.fn().mockResolvedValue({
+          id: 3,
+          status: PaymentStatus.FAILED,
+          failureReason: 'Mock payment declined',
+        }),
+      },
+    };
+    const prisma = {
+      payment: { findUnique: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    } as unknown as PrismaService;
+    const service = new PaymentsService(prisma);
+
+    const result = await service.processPayment({ ...dto, mockSuccess: false }, 'charge-fail');
+
+    expect(result).toMatchObject({
+      success: false,
+      orderStatus: OrderStatus.PAYMENT_FAILED,
+      payment: { status: PaymentStatus.FAILED, failureReason: 'Mock payment declined' },
     });
   });
 });

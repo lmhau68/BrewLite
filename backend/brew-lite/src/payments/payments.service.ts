@@ -53,7 +53,7 @@ export class PaymentsService {
           // This is the mock gateway boundary. Persisting its result with the payment
           // and order makes a repeated key replay the original outcome.
           if (dto.mockSuccess === false) {
-            await tx.payment.update({
+            const failedPayment = await tx.payment.update({
               where: { id: payment.id },
               data: { status: PaymentStatus.FAILED, failureReason: 'Mock payment declined' },
             });
@@ -68,7 +68,7 @@ export class PaymentsService {
               success: false,
               isIdempotent: false,
               message: 'Thanh toán giả lập thất bại; có thể thử lại bằng khóa mới',
-              payment: { ...payment, status: PaymentStatus.FAILED },
+              payment: failedPayment,
               orderStatus: OrderStatus.PAYMENT_FAILED,
             };
           }
@@ -138,7 +138,8 @@ export class PaymentsService {
     if (
       payment.orderId !== dto.orderId ||
       payment.method !== dto.method ||
-      Math.abs(payment.amount - dto.amount) > 0.01
+      Math.abs(payment.amount - dto.amount) > 0.01 ||
+      (dto.mockSuccess === false) !== (payment.status === PaymentStatus.FAILED)
     ) {
       throw new ConflictException('Idempotency-Key đã được dùng cho yêu cầu thanh toán khác');
     }
