@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { PrismaService } from './../src/prisma/prisma.service.js';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -10,17 +11,20 @@ describe('AppController (e2e)', () => {
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue({ product: { findMany: vi.fn().mockResolvedValue([]) } })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('/products (GET)', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/products')
       .expect(200)
-      .expect('Hello World!');
+      .expect([]);
   });
 
   afterEach(async () => {

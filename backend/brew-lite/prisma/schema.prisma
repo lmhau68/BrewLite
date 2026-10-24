@@ -13,6 +13,7 @@ model User {
   passwordHash  String
   loyaltyPoints Int       @default(0)
   orders        Order[]
+  loyaltyTransactions LoyaltyTransaction[]
 }
 
 model Product {
@@ -21,6 +22,7 @@ model Product {
   price       Float
   imageUrl    String
   stock       Int
+  version     Int          @default(0)
   orderItems  OrderItem[]
 }
 
@@ -29,10 +31,15 @@ model Order {
   userId      Int?         
   status      OrderStatus  @default(PENDING)
   total       Float
+  discountCode String?
+  discountAmount Float    @default(0)
+  loyaltyPointsAwarded Int @default(0)
+  version     Int          @default(0)
   createdAt   DateTime     @default(now())
   user        User?        @relation(fields: [userId], references: [id])
   items       OrderItem[]
-  payment     Payment?
+  payments    Payment[]
+  loyaltyTransaction LoyaltyTransaction?
 }
 
 model OrderItem {
@@ -48,11 +55,37 @@ model OrderItem {
 
 model Payment {
   id             Int      @id @default(autoincrement())
-  orderId        Int      @unique
-  idempotencyKey String   @unique 
+  orderId        Int
+  idempotencyKey String   @unique
   amount         Float
   method         String   // VI_DIEN_TU, THE_NGAN_HANG
+  status         PaymentStatus @default(PROCESSING)
+  failureReason  String?
+  createdAt      DateTime @default(now())
   order          Order    @relation(fields: [orderId], references: [id])
+}
+
+model Promotion {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique
+  discountPercent Int
+  maxDiscount     Float?
+  minimumSubtotal Float    @default(0)
+  active          Boolean  @default(true)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  maxUses         Int?
+  usedCount       Int      @default(0)
+}
+
+model LoyaltyTransaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  orderId   Int      @unique
+  points    Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
 }
 
 enum OrderStatus {
@@ -63,4 +96,10 @@ enum OrderStatus {
   COMPLETED
   PAYMENT_FAILED
   CANCELLED
+}
+
+enum PaymentStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
 }
