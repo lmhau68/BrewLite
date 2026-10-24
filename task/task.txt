@@ -1,0 +1,21 @@
+2. Khởi chạy Backend và Database:
+cd backend/brew-lite
+docker-compose up -d (đảm bảo đã mở docker desktop)
+npm install
+npx prisma db push
+node prisma/seed.js
+npm run start:dev
+
+3. Khởi chạy Frontend:
+cd frontend/brewlite
+Tạo file .env.local trong frontend/brewlite và dán code: NEXT_PUBLIC_API_URL=http://localhost:4000
+npm install
+npm run dev
+Khởi chạy:
+Truy cập http://localhost:3000 và tiến hành test toàn bộ luồng nghiệp vụ (End-to-End). Hãy rà soát kỹ việc ghép nối dữ liệu giữa giao diện và API.
+
+Tui đã chạy giao diện vừa rồi để test thì tầng nghiệp lõi lõi Backend (cổng 4000) đang hoạt động rất tốt. Tuy nhiên, tui thấy bên Frontend (cổng 3000) đang bị ko đồng bộ nghiêm trọng so với API (backend) là do bên frontend push code lên trước nên giờ bên frondtend cần kiểm tra lại và hoàn thiện theo đúng các nghiệp vụ  của backend, đây là một số lỗi tui thấy được trước mắt và cần fix ngay nên 2 ông phụ trách Frontend xem qua và fix các lỗi này nha:
+1. Nhiệm vụ của HÙng (Phụ trách Giỏ hàng & Thanh toán - Task 5, 8)
+Lỗi kẹt State Giỏ hàng: Đặt đơn xong mà giỏ hàng không reset, đơn sau vẫn dính món cũ. Ông phải kiểm tra lại hàm xoá bộ đệm (dispatch clear cart) trong Context/Zustand. Bắt buộc gọi hàm này ngay khi API thanh toán trả về HTTP Status 200 thành công.
+Đánh bóng UI Thanh toán: Dù kiến trúc hệ thống của mình chỉ yêu cầu mô phỏng cổng thanh toán (Mock Gateway), nhưng ông hãy bổ sung thêm các input nhập số thẻ ảo (chỉ cần UI, không cần lưu thật) để luồng demo trông thuyết phục hơn.   
+Hiển thị Điểm tích lũy: Móc dữ liệu loyaltyPointsAwarded từ Backend trả về và hiển thị lên màn hình "Đặt đơn xong".

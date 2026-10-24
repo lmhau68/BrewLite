@@ -25,9 +25,17 @@ Công nghệ: Next.js (PWA) · NestJS · PostgreSQL · Docker.
 | Unit/component test, CI (Install → Lint → Test → Build) | ✅ |
 | Xác nhận đơn (`/checkout`): thông tin người nhận → tạo đơn → thanh toán mô phỏng | ✅ |
 | Theo dõi đơn (`/orders`, `/orders/[id]`): lịch sử, chi tiết, thanh toán lại | ✅ |
+| Đồng bộ hợp đồng API: giá theo size/topping, lưu thông tin người nhận, trả điểm tích lũy | ✅ |
 | Đăng nhập / JWT | Sprint 2 |
 
-> Các màn hình `/checkout` và `/orders` chạy được bằng dữ liệu giả (không cần API). Khi bật `NEXT_PUBLIC_API_URL`, giao diện gọi `POST /orders`, `GET /orders`, `GET /orders/:id`, `POST /payments` — phía API do nhóm backend phụ trách.
+> Các màn hình `/checkout` và `/orders` chạy được bằng dữ liệu giả (không cần API). Khi bật `NEXT_PUBLIC_API_URL`, giao diện gọi `POST /orders`, `GET /orders`, `GET /orders/:id`, `POST /payments`.
+>
+> **Hợp đồng API (đã đồng bộ hai chiều):**
+>
+> - `GET /products` trả kèm `description`, `category`, `emoji`, `customizable`, `bestSeller` — giao diện dựng được lưới menu, lọc danh mục và màn chọn size/topping.
+> - `POST /orders` nhận `customerName`, `customerPhone`, `address`, `note`, `promotionCode` và `items[].toppings[].id`. **Server tự tính giá** theo bảng size/topping (client không gửi giá) và trả về `unitPrice`/`lineTotal` cho từng dòng.
+> - `POST /payments` trả `orderStatus` và `loyaltyPointsAwarded` để màn "Đặt đơn xong" hiển thị điểm tích lũy.
+> - Mỗi lần thanh toán dùng một `idempotencyKey` riêng; lần thử sau sau khi thất bại sẽ sinh khoá mới (API từ chối tái sử dụng khoá cũ cho yêu cầu khác — ADR-005).
 
 ## Chạy local (VS Code)
 

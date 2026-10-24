@@ -19,21 +19,30 @@ model User {
 model Product {
   id          Int          @id @default(autoincrement())
   name        String
+  description String       @default("")
+  category    String       @default("coffee")
+  emoji       String       @default("🧋")
   price       Float
   imageUrl    String
   stock       Int
+  customizable Boolean    @default(true)
+  bestSeller  Boolean      @default(false)
   version     Int          @default(0)
   orderItems  OrderItem[]
 }
 
 model Order {
   id          Int          @id @default(autoincrement())
-  userId      Int?         
+  userId      Int?
   status      OrderStatus  @default(PENDING)
   total       Float
   discountCode String?
   discountAmount Float    @default(0)
   loyaltyPointsAwarded Int @default(0)
+  customerName  String?
+  customerPhone String?
+  address       String?
+  note          String?
   version     Int          @default(0)
   createdAt   DateTime     @default(now())
   user        User?        @relation(fields: [userId], references: [id])
@@ -47,7 +56,9 @@ model OrderItem {
   orderId     Int
   productId   Int
   size        String   // S, M, L
+  toppings    Json?    // [{ id, name, price }]
   qty         Int
+  unitPrice   Float    @default(0)
   lineTotal   Float
   order       Order    @relation(fields: [orderId], references: [id])
   product     Product  @relation(fields: [productId], references: [id])
@@ -66,16 +77,16 @@ model Payment {
 }
 
 model Promotion {
-  id              Int      @id @default(autoincrement())
-  code            String   @unique
+  id              Int       @id @default(autoincrement())
+  code            String    @unique
   discountPercent Int
   maxDiscount     Float?
-  minimumSubtotal Float    @default(0)
-  active          Boolean  @default(true)
+  minimumSubtotal Float     @default(0)
+  active          Boolean   @default(true)
   startsAt        DateTime?
   expiresAt       DateTime?
   maxUses         Int?
-  usedCount       Int      @default(0)
+  usedCount       Int       @default(0)
 }
 
 model LoyaltyTransaction {

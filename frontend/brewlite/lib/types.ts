@@ -83,6 +83,9 @@ export interface OrderPayment {
   method: PaymentMethod;
   amount: number;
   idempotencyKey: string;
+  /** Trạng thái giao dịch: PROCESSING | SUCCEEDED | FAILED */
+  status?: string;
+  failureReason?: string;
 }
 
 export interface Order {
@@ -94,6 +97,12 @@ export interface Order {
   customer: OrderCustomer;
   items: OrderLine[];
   payment?: OrderPayment | null;
+  /** Mã khuyến mãi đã áp dụng (nếu có) */
+  discountCode?: string | null;
+  /** Số tiền được giảm (VND) */
+  discountAmount?: number;
+  /** Điểm tích lũy được cộng cho đơn này */
+  loyaltyPointsAwarded?: number;
 }
 
 /** Payload gửi lên API khi tạo đơn. Không gửi giá: API tự tính từ CSDL. */
@@ -110,4 +119,5 @@ export interface CreateOrderPayload {
   address?: string;
   note?: string;
   items: CreateOrderItemPayload[];
+  promotionCode?: string;
 }

@@ -65,6 +65,7 @@ export function buildOrderItems(lines: CartLine[]): CreateOrderItemPayload[] {
 export function buildOrderPayload(
   lines: CartLine[],
   customer: { name: string; phone: string; address?: string; note?: string },
+  promotionCode?: string,
 ): CreateOrderPayload {
   return {
     customerName: customer.name.trim(),
@@ -72,6 +73,7 @@ export function buildOrderPayload(
     address: customer.address?.trim() || undefined,
     note: customer.note?.trim() || undefined,
     items: buildOrderItems(lines),
+    promotionCode: promotionCode?.trim() || undefined,
   };
 }
 
