@@ -6,10 +6,10 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { useAuth } from "./AuthProvider";
 import { createOrder, getOrder, getOrders, payOrder, type PayOrderResult } from "@/lib/api";
 import type { CreateOrderPayload, Order, PaymentMethod } from "@/lib/types";
 
@@ -23,10 +23,7 @@ interface OrdersContextValue {
   refresh: () => Promise<void>;
   /** Tạo đơn mới, trả về đơn đã tạo */
   placeOrder: (payload: CreateOrderPayload) => Promise<Order>;
-  /**
-   * Thanh toán đơn (mô phỏng).
-   * Kết quả đã bao gồm đơn mới nhất từ API và số điểm tích lũy được cộng.
-   */
+  /** Thanh toán đơn (mô phỏng), trả về kết quả và cập nhật danh sách */
   pay: (
     order: Order,
     method: PaymentMethod,
@@ -43,7 +40,8 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState("");
-  const loaded = useRef(false);
+  const { session, ready } = useAuth();
+  const token = session?.accessToken ?? null;
 
   const refresh = useCallback(async () => {
     setStatus("loading");
@@ -56,12 +54,12 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Nạp danh sách đơn lần đầu khi mount
+  // Nạp danh sách đơn khi mount và nạp lại mỗi khi đăng nhập/đăng xuất (đổi chủ sở hữu đơn)
   useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
+    if (!ready) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- tải dữ liệu khi phiên đăng nhập đổi
     void refresh();
-  }, [refresh]);
+  }, [refresh, ready, token]);
 
   const placeOrder = useCallback(async (payload: CreateOrderPayload) => {
     const order = await createOrder(payload);
@@ -84,39 +82,18 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         idempotencyKey,
         mockSuccess,
       });
-
-      // Ưu tiên đơn mới nhất do API trả về; nếu không có thì nạp lại từ API.
-      let latest = result.order;
-      if (!latest) {
-        try {
-          latest = await getOrder(order.id);
-        } catch {
-          latest = null;
-        }
+      // Đồng bộ lại trạng thái đơn từ nguồn sự thật
+      try {
+        const fresh = await getOrder(order.id);
+        setOrders((prev) =>
+          prev.some((o) => o.id === fresh.id)
+            ? prev.map((o) => (o.id === fresh.id ? fresh : o))
+            : [fresh, ...prev],
+        );
+        return { ...result, order: fresh };
+      } catch {
+        return result;
       }
-      if (!latest) {
-        // API không trả về đơn: tự ghép kết quả giao dịch vào đơn đang có.
-        latest = {
-          ...order,
-          status: result.orderStatus ?? order.status,
-          loyaltyPointsAwarded: result.loyaltyPointsAwarded,
-          payment: result.payment
-            ? {
-                method: result.payment.method,
-                amount: result.payment.amount,
-                idempotencyKey: result.payment.idempotencyKey,
-                status: result.payment.status,
-                failureReason: result.payment.failureReason,
-              }
-            : order.payment,
-        };
-      }
-      setOrders((prev) =>
-        prev.some((o) => o.id === latest!.id)
-          ? prev.map((o) => (o.id === latest!.id ? latest! : o))
-          : [latest!, ...prev],
-      );
-      return { ...result, order: latest };
     },
     [],
   );

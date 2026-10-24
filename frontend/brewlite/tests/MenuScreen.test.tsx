@@ -1,6 +1,7 @@
 import { cleanup as cleanupRender, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AuthProvider } from "@/components/AuthProvider";
 import { CartProvider } from "@/components/CartProvider";
 import { MenuScreen } from "@/components/MenuScreen";
 import { MOCK_PRODUCTS } from "@/lib/mock-data";
@@ -13,7 +14,9 @@ const mockedGet = vi.mocked(getProducts);
 function setup() {
   render(
     <CartProvider>
-      <MenuScreen />
+      <AuthProvider>
+        <MenuScreen />
+      </AuthProvider>
     </CartProvider>,
   );
   return userEvent.setup();

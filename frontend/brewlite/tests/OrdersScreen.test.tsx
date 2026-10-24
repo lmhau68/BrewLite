@@ -124,12 +124,7 @@ describe("OrderDetailScreen - chi tiết đơn", () => {
 
   it("cho thanh toán lại đơn chờ thanh toán", async () => {
     mockedGetOrder.mockResolvedValue(orderB);
-    mockedPayOrder.mockResolvedValue({
-      success: true,
-      message: "Thanh toán thành công",
-      order: null,
-      loyaltyPointsAwarded: 0,
-    });
+    mockedPayOrder.mockResolvedValue({ success: true, message: "Thanh toán thành công", order: null });
     mockedGetOrder.mockResolvedValueOnce(orderB).mockResolvedValue({ ...orderB, status: "PAID" });
     const user = userEvent.setup();
     renderWithOrders(<OrderDetailScreen id={2} />);
