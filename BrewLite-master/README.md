@@ -1,0 +1,107 @@
+# BrewLite – Công nghệ Phần mềm (Assignment 2)
+
+Ứng dụng đặt đồ uống mobile-first: **Xem menu → Chọn tùy chọn → Giỏ hàng → Đặt đơn → Thanh toán → Theo dõi đơn**.
+Công nghệ: Next.js (PWA) · NestJS · PostgreSQL · Docker.
+
+## Cấu trúc repository
+
+| Thư mục | Nội dung | Tương ứng đề bài |
+|---|---|---|
+| `frontend/brewlite` | Next.js mobile-first/PWA | `apps/web` |
+| `backend/brew-lite` | NestJS API | `apps/api` |
+| `backend/prisma` | Schema PostgreSQL (Prisma) | – |
+| `docs/` | Yêu cầu, sơ đồ, kiến trúc + ADR, truy vết | `docs/` |
+| `tests/` | Integration/E2E (Task 5) | `tests/` |
+| `.github/workflows` | CI (Task 4.4), CD (Task 5) | `.github/workflows` |
+
+## Trạng thái Sprint 1
+
+| Hạng mục | Trạng thái |
+|---|---|
+| `GET /products`, `GET /products/:id`, `GET /health` | ✅ |
+| Màn hình menu (tìm kiếm, danh mục, chi tiết + size/topping, giỏ hàng) | ✅ |
+| Trạng thái loading / empty / error | ✅ |
+| Dữ liệu mẫu (frontend mock + API seed) | ✅ |
+| Unit/component test, CI (Install → Lint → Test → Build) | ✅ |
+| Xác nhận đơn (`/checkout`): thông tin người nhận → tạo đơn → thanh toán mô phỏng | ✅ |
+| Theo dõi đơn (`/orders`, `/orders/[id]`): lịch sử, chi tiết, thanh toán lại | ✅ |
+| Đăng nhập / Đăng ký (`/login`, `/register`) + JWT lưu localStorage, gửi kèm khi đặt đơn | ✅ |
+| Size/Topping render động từ API (`GET /options`) | ✅ |
+
+> Các màn hình `/checkout` và `/orders` chạy được bằng dữ liệu giả (không cần API). Khi bật `NEXT_PUBLIC_API_URL`, giao diện gọi `POST /orders`, `GET /orders`, `GET /orders/:id`, `POST /payments` — phía API do nhóm backend phụ trách.
+
+## Chạy local (VS Code)
+
+Yêu cầu: **Node.js ≥ 20** (khuyến nghị 22) và npm.
+
+### Cách 1 – Chỉ frontend (dữ liệu giả, nhanh nhất)
+
+```bash
+cd frontend/brewlite
+npm install
+npm run dev          # http://localhost:3000
+```
+
+Xem thử các trạng thái: `http://localhost:3000/?state=error` và `?state=empty`.
+
+Các màn hình chính: `/` (menu), `/checkout` (xác nhận đơn + thanh toán), `/orders` (lịch sử đơn), `/orders/[id]` (chi tiết đơn).
+
+### Cách 2 – Frontend + API thật
+
+Terminal 1 – API:
+
+```bash
+cd backend/brew-lite
+npm install
+npm run start:dev    # http://localhost:4000  (thử: /health, /products, /products/1)
+```
+
+Terminal 2 – Web:
+
+```bash
+cd frontend/brewlite
+echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > .env.local
+npm install
+npm run dev
+```
+
+### API
+
+| Method | Đường dẫn | Mô tả |
+|---|---|---|
+| GET | `/products` | Danh sách; tuỳ chọn `?category=coffee\|tea\|milk-tea\|blended&q=từ khoá` |
+| GET | `/products/:id` | Chi tiết; `400` nếu id không phải số, `404` nếu không tồn tại |
+| GET | `/options` | Danh sách size (kèm phụ thu) và topping đang bán — frontend render động |
+| POST | `/auth/register`, `/auth/login` | Đăng ký / đăng nhập (login trả `accessToken`, `userId`, `email`) |
+| POST | `/orders` | Tạo đơn; `items[].toppings: [{ id }]`, `customerName/Phone`, `address`, `note`. Có header `Authorization: Bearer …` thì đơn gắn với user |
+| GET | `/orders` | Có JWT: đơn của user; khách: `?ids=1,2,3` |
+| GET | `/health` | Kiểm tra sống |
+
+### Lint, test, build
+
+```bash
+# trong frontend/brewlite hoặc backend/brew-lite
+npm run lint
+npm test
+npm run build
+# chỉ backend: npm run test:e2e
+```
+
+### Database (PostgreSQL + Prisma)
+
+```bash
+docker compose up -d db                      # PostgreSQL 15 tại localhost:5432
+cd backend/brew-lite
+cp ../../.env.example .env                   # DATABASE_URL, JWT_SECRET, CORS_ORIGIN
+npm install
+npx prisma migrate deploy                    # áp toàn bộ migration (tạo bảng Product/Topping/...)
+npx prisma db seed                           # 14 món + 4 topping + mã WELCOME10 (chạy lại an toàn)
+npm run start:dev                            # http://localhost:4000
+```
+
+> Nếu menu hiện món nhưng nút Size/Topping trống hoặc bị khoá: DB chưa chạy migration mới
+> (`20261024000000_menu_options_and_customer_info`) hoặc chưa seed lại. Chạy lại 2 lệnh `migrate deploy` + `db seed` ở trên.
+
+## Quy trình làm việc
+
+Xem [`CONTRIBUTING.md`](./CONTRIBUTING.md) (branch, PR, commit, Definition of Done) và [`docs/`](./docs).

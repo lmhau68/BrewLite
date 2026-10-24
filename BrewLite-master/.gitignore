@@ -1,0 +1,17 @@
+# Thư viện nặng nề (sẽ tự tải lại bằng npm install)
+node_modules/
+
+# Biến môi trường chứa mật khẩu bảo mật (CỰC KỲ QUAN TRỌNG)
+.env
+
+# Thư mục hệ thống của IDE và OS
+.DS_Store
+.vscode/
+dist/
+build/
+
+# Giữ lại file mẫu, bỏ qua mọi file env thật
+.env.*
+!.env.example
+coverage/
+*.log

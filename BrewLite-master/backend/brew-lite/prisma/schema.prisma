@@ -1,0 +1,127 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String
+  loyaltyPoints Int       @default(0)
+  orders        Order[]
+  loyaltyTransactions LoyaltyTransaction[]
+}
+
+model Product {
+  id          Int          @id @default(autoincrement())
+  name        String
+  price       Float
+  imageUrl    String
+  stock       Int
+  version     Int          @default(0)
+  description String       @default("")
+  /// coffee | tea | milk-tea | blended (khớp CategoryId ở frontend)
+  category    String       @default("coffee")
+  emoji       String       @default("🧋")
+  /// false = món không có size/topping (vd. nước suối)
+  customizable Boolean     @default(true)
+  bestSeller  Boolean      @default(false)
+  orderItems  OrderItem[]
+}
+
+model Topping {
+  id     Int     @id @default(autoincrement())
+  /// Mã ổn định dùng ở API/frontend, vd "pearl"
+  code   String  @unique
+  name   String
+  price  Float
+  active Boolean @default(true)
+}
+
+model Order {
+  id          Int          @id @default(autoincrement())
+  userId      Int?         
+  status      OrderStatus  @default(PENDING)
+  total       Float
+  discountCode String?
+  discountAmount Float    @default(0)
+  loyaltyPointsAwarded Int @default(0)
+  customerName  String?
+  customerPhone String?
+  address       String?
+  note          String?
+  version     Int          @default(0)
+  createdAt   DateTime     @default(now())
+  user        User?        @relation(fields: [userId], references: [id])
+  items       OrderItem[]
+  payments    Payment[]
+  loyaltyTransaction LoyaltyTransaction?
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  productId   Int
+  size        String   // S, M, L
+  /// Ảnh chụp topping tại thời điểm đặt: [{ id, name, price }]
+  toppings    Json     @default("[]")
+  qty         Int
+  lineTotal   Float
+  order       Order    @relation(fields: [orderId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id             Int      @id @default(autoincrement())
+  orderId        Int
+  idempotencyKey String   @unique
+  amount         Float
+  method         String   // VI_DIEN_TU, THE_NGAN_HANG
+  status         PaymentStatus @default(PROCESSING)
+  failureReason  String?
+  createdAt      DateTime @default(now())
+  order          Order    @relation(fields: [orderId], references: [id])
+}
+
+model Promotion {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique
+  discountPercent Int
+  maxDiscount     Float?
+  minimumSubtotal Float    @default(0)
+  active          Boolean  @default(true)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  maxUses         Int?
+  usedCount       Int      @default(0)
+}
+
+model LoyaltyTransaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  orderId   Int      @unique
+  points    Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+  PAYMENT_FAILED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
