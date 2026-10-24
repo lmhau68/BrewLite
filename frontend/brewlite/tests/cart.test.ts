@@ -21,7 +21,7 @@ describe("unitPriceOf", () => {
   it("cộng giá size và topping", () => {
     expect(unitPriceOf(coffee, "S", [])).toBe(29000);
     expect(unitPriceOf(coffee, "L", [])).toBe(39000);
-    expect(unitPriceOf(coffee, "M", [pearl, cheese])).toBe(29000 + 6000 + 8000 + 10000);
+    expect(unitPriceOf(coffee, "M", [pearl, cheese])).toBe(29000 + 5000 + 8000 + 10000);
   });
 });
 
@@ -60,9 +60,9 @@ describe("cartReducer", () => {
   });
 
   it("tính tổng tiền và số lượng", () => {
-    const s = add(add([], "S", 2), "M", 1, []); // 2×37.000 + 1×35.000
+    const s = add(add([], "S", 2), "M", 1, []); // 2×37.000 + 1×34.000
     expect(cartCount(s)).toBe(3);
-    expect(cartTotal(s)).toBe(2 * 37000 + 35000);
+    expect(cartTotal(s)).toBe(2 * 37000 + 34000);
     expect(cartReducer(s, { type: "clear" })).toEqual([]);
   });
 });

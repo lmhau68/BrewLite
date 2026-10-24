@@ -3,23 +3,28 @@
 import { useMemo, useState } from "react";
 import { unitPriceOf, MAX_QTY_PER_LINE } from "@/lib/cart";
 import { formatVND } from "@/lib/format";
-import { SIZES, TOPPINGS } from "@/lib/menu-options";
-import type { Product, SizeId, ToppingOption } from "@/lib/types";
+import type { MenuOptions, Product, SizeId, ToppingOption } from "@/lib/types";
 import { Sheet } from "./Sheet";
 
 interface Props {
   product: Product;
+  /** Size/topping lấy từ API (GET /options) */
+  options: MenuOptions;
   onClose: () => void;
   onAdd: (product: Product, size: SizeId, toppings: ToppingOption[], qty: number) => void;
 }
 
-export function ProductSheet({ product, onClose, onAdd }: Props) {
-  const [size, setSize] = useState<SizeId>("S");
+export function ProductSheet({ product, options, onClose, onAdd }: Props) {
+  const { sizes, toppings: toppingOptions } = options;
+  const [size, setSize] = useState<SizeId>(sizes[0]?.id ?? "S");
   const [toppingIds, setToppingIds] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
 
-  const toppings = useMemo(() => TOPPINGS.filter((t) => toppingIds.includes(t.id)), [toppingIds]);
-  const unit = unitPriceOf(product, size, toppings);
+  const toppings = useMemo(
+    () => toppingOptions.filter((t) => toppingIds.includes(t.id)),
+    [toppingOptions, toppingIds],
+  );
+  const unit = unitPriceOf(product, size, toppings, sizes);
 
   const toggleTopping = (id: string) =>
     setToppingIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
@@ -76,7 +81,7 @@ export function ProductSheet({ product, onClose, onAdd }: Props) {
           <fieldset className="pb-4">
             <legend className="mb-2 font-semibold text-espresso">Chọn size</legend>
             <div className="grid grid-cols-3 gap-2">
-              {SIZES.map((s) => (
+              {sizes.map((s) => (
                 <label
                   key={s.id}
                   className="cursor-pointer rounded-xl border border-line bg-surface p-2 text-center text-sm has-[:checked]:border-espresso has-[:checked]:bg-espresso has-[:checked]:text-cream"
@@ -96,10 +101,11 @@ export function ProductSheet({ product, onClose, onAdd }: Props) {
             </div>
           </fieldset>
 
+          {toppingOptions.length > 0 && (
           <fieldset>
             <legend className="mb-2 font-semibold text-espresso">Topping <span className="font-normal text-muted">(tuỳ chọn)</span></legend>
             <div className="space-y-2">
-              {TOPPINGS.map((t) => (
+              {toppingOptions.map((t) => (
                 <label
                   key={t.id}
                   className="flex cursor-pointer items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5 has-[:checked]:border-caramel has-[:checked]:bg-caramel/10"
@@ -118,6 +124,7 @@ export function ProductSheet({ product, onClose, onAdd }: Props) {
               ))}
             </div>
           </fieldset>
+          )}
         </>
       ) : (
         <p className="rounded-xl bg-cream p-3 text-sm text-muted">Món này không có tuỳ chọn size hoặc topping.</p>

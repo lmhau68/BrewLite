@@ -5,6 +5,7 @@ import { OrderDetailScreen } from "@/components/OrderDetailScreen";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import { OrdersScreen } from "@/components/OrdersScreen";
 import type { Order } from "@/lib/types";
+import { AuthProvider } from "@/components/AuthProvider";
 
 vi.mock("@/lib/api", () => ({
   createOrder: vi.fn(),
@@ -45,7 +46,11 @@ const orderA = makeOrder({ id: 1, total: 86000, createdAt: "2026-10-23T02:35:00.
 const orderB = makeOrder({ id: 2, status: "PENDING", total: 35000, createdAt: "2026-10-24T09:00:00.000Z" });
 
 function renderWithOrders(ui: React.ReactElement) {
-  return render(<OrdersProvider>{ui}</OrdersProvider>);
+  return render(
+    <AuthProvider>
+      <OrdersProvider>{ui}</OrdersProvider>
+    </AuthProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -124,12 +129,7 @@ describe("OrderDetailScreen - chi tiết đơn", () => {
 
   it("cho thanh toán lại đơn chờ thanh toán", async () => {
     mockedGetOrder.mockResolvedValue(orderB);
-    mockedPayOrder.mockResolvedValue({
-      success: true,
-      message: "Thanh toán thành công",
-      order: null,
-      loyaltyPointsAwarded: 0,
-    });
+    mockedPayOrder.mockResolvedValue({ success: true, message: "Thanh toán thành công", order: null, loyaltyPointsAwarded: 0 });
     mockedGetOrder.mockResolvedValueOnce(orderB).mockResolvedValue({ ...orderB, status: "PAID" });
     const user = userEvent.setup();
     renderWithOrders(<OrderDetailScreen id={2} />);
