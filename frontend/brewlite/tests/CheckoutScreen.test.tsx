@@ -6,6 +6,7 @@ import { CartProvider } from "@/components/CartProvider";
 import { CheckoutScreen } from "@/components/CheckoutScreen";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import type { CartLine, Order } from "@/lib/types";
+import { AuthProvider } from "@/components/AuthProvider";
 
 vi.mock("@/lib/api", () => ({
   createOrder: vi.fn(),
@@ -62,11 +63,13 @@ const paidOrder: Order = {
 
 function setup() {
   render(
-    <CartProvider>
-      <OrdersProvider>
-        <CheckoutScreen />
-      </OrdersProvider>
-    </CartProvider>,
+    <AuthProvider>
+      <CartProvider>
+        <OrdersProvider>
+          <CheckoutScreen />
+        </OrdersProvider>
+      </CartProvider>
+    </AuthProvider>,
   );
   return userEvent.setup();
 }
@@ -83,7 +86,7 @@ beforeEach(() => {
   mockedGetOrders.mockReset();
   mockedGetOrders.mockResolvedValue([]);
   mockedCreateOrder.mockResolvedValue(pendingOrder);
-  mockedPayOrder.mockResolvedValue({ success: true, message: "Thanh toán thành công", order: null });
+  mockedPayOrder.mockResolvedValue({ success: true, message: "Thanh toán thành công", order: null, loyaltyPointsAwarded: 0 });
   mockedGetOrder.mockResolvedValue(paidOrder);
 });
 
@@ -171,6 +174,7 @@ describe("CheckoutScreen - thanh toán", () => {
       success: false,
       message: "Thanh toán giả lập thất bại",
       order: null,
+      loyaltyPointsAwarded: 0, 
     });
     const user = setup();
     await screen.findByText("Cà phê sữa đá");
@@ -207,14 +211,16 @@ describe("CartProvider - Strict Mode", () => {
   it("không ghi đè giỏ hàng đã lưu khi effect chạy hai lần", async () => {
     seedCart();
     render(
-      <StrictMode>
-        <CartProvider>
-          <OrdersProvider>
-            <CheckoutScreen />
-          </OrdersProvider>
-        </CartProvider>
-      </StrictMode>,
-    );
+  <StrictMode>
+    <AuthProvider>
+      <CartProvider>
+        <OrdersProvider>
+          <CheckoutScreen />
+        </OrdersProvider>
+      </CartProvider>
+    </AuthProvider>
+  </StrictMode>,
+);
 
     expect(await screen.findByText("Cà phê sữa đá")).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem(CART_KEY) ?? "[]")).toHaveLength(1);

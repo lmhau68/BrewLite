@@ -272,7 +272,7 @@ export interface PayOrderResult {
   message: string;
   order: Order | null;
   /** Điểm tích lũy được cộng cho đơn (0 nếu không có) */
-  loyaltyPointsAwarded: number;
+  loyaltyPointsAwarded?: number;
   /** Trạng thái đơn sau khi cố gắng thanh toán */
   orderStatus?: OrderStatus;
   /** Giao dịch mà API trả về (dùng để hiển thị phương thức đã trả) */

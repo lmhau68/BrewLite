@@ -100,6 +100,8 @@ export interface OrderPayment {
   method: PaymentMethod;
   amount: number;
   idempotencyKey: string;
+  status?: string;
+  failureReason?: string;
 }
 
 export interface Order {
@@ -111,6 +113,9 @@ export interface Order {
   customer: OrderCustomer;
   items: OrderLine[];
   payment?: OrderPayment | null;
+  discountCode?: string | null;
+  discountAmount?: number;
+  loyaltyPointsAwarded?: number;
 }
 
 /** Payload gửi lên API khi tạo đơn. Không gửi giá: API tự tính từ CSDL. */

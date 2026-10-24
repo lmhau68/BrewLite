@@ -33,7 +33,7 @@ const labelClass = "mb-1 block text-sm font-semibold text-espresso";
 export function CheckoutScreen() {
   const { lines, count, total, dispatch } = useCart();
   const { placeOrder, pay } = useOrders();
-  const { session } = useAuth();
+  const { user } = useAuth();
 
   const [step, setStep] = useState<Step>("form");
   const [form, setForm] = useState({ name: "", phone: "", address: "", note: "" });
@@ -163,8 +163,8 @@ export function CheckoutScreen() {
               <form onSubmit={handleCreateOrder} noValidate className="space-y-3 rounded-2xl border border-line bg-surface p-4">
                 <h2 className="font-semibold text-espresso">Thông tin người nhận</h2>
                 <p className="rounded-xl bg-cream px-3 py-2 text-xs text-muted">
-                  {session ? (
-                    <>Đặt đơn với tài khoản <strong>{session.email}</strong>.</>
+                  {user ? (
+                    <>Đặt đơn với tài khoản <strong>{user.email}</strong>.</>
                   ) : (
                     <>
                       Bạn đang đặt đơn với tư cách khách.{" "}

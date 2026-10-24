@@ -40,8 +40,8 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState("");
-  const { session, ready } = useAuth();
-  const token = session?.accessToken ?? null;
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
 
   const refresh = useCallback(async () => {
     setStatus("loading");
@@ -56,10 +56,9 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
 
   // Nạp danh sách đơn khi mount và nạp lại mỗi khi đăng nhập/đăng xuất (đổi chủ sở hữu đơn)
   useEffect(() => {
-    if (!ready) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- tải dữ liệu khi phiên đăng nhập đổi
-    void refresh();
-  }, [refresh, ready, token]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- tải dữ liệu khi phiên đăng nhập đổi
+  void refresh();
+}, [refresh, userId]);
 
   const placeOrder = useCallback(async (payload: CreateOrderPayload) => {
     const order = await createOrder(payload);

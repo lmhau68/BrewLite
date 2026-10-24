@@ -6,10 +6,13 @@ import { CartProvider } from "@/components/CartProvider";
 import { MenuScreen } from "@/components/MenuScreen";
 import { MOCK_PRODUCTS } from "@/lib/mock-data";
 
-vi.mock("@/lib/api", () => ({ getProducts: vi.fn() }));
-import { getProducts } from "@/lib/api";
+vi.mock("@/lib/api", () => ({ getProducts: vi.fn(), getOptions: vi.fn() }));
+import { getOptions, getProducts } from "@/lib/api";
+import { SIZES, TOPPINGS } from "@/lib/menu-options";
 
 const mockedGet = vi.mocked(getProducts);
+const mockedGetOptions = vi.mocked(getOptions);
+
 
 function setup() {
   render(
@@ -24,6 +27,8 @@ function setup() {
 
 beforeEach(() => {
   mockedGet.mockReset();
+  mockedGetOptions.mockReset();
+  mockedGetOptions.mockResolvedValue({ sizes: SIZES, toppings: TOPPINGS });
 });
 
 describe("MenuScreen - trạng thái", () => {
@@ -90,8 +95,8 @@ describe("MenuScreen - luồng chọn món vào giỏ", () => {
     await user.click(within(dialog).getByLabelText(/M · Vừa/));
     await user.click(within(dialog).getByLabelText(/Trân châu đen/));
     await user.click(within(dialog).getByRole("button", { name: "Tăng số lượng" }));
-    // (29.000 + 6.000 + 8.000) × 2 = 86.000
-    await user.click(within(dialog).getByRole("button", { name: /Thêm vào giỏ · 86\.000đ/ }));
+    // (29.000 + 5.000 + 8.000) × 2 = 84.000
+    await user.click(within(dialog).getByRole("button", { name: /Thêm vào giỏ · 84\.000đ/ }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByTestId("cart-badge")).toHaveTextContent("2");
@@ -99,7 +104,7 @@ describe("MenuScreen - luồng chọn món vào giỏ", () => {
     await user.click(screen.getByRole("button", { name: /Xem giỏ hàng/ }));
     const cart = screen.getByRole("dialog");
     expect(within(cart).getByText("Cà phê sữa đá")).toBeInTheDocument();
-    expect(within(cart).getAllByText("86.000đ").length).toBeGreaterThan(0);
+    expect(within(cart).getAllByText("84.000đ").length).toBeGreaterThan(0);
 
     await user.click(within(cart).getByRole("button", { name: "Xoá Cà phê sữa đá" }));
     expect(within(cart).getByText("Giỏ hàng đang trống")).toBeInTheDocument();
