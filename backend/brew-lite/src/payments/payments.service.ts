@@ -8,6 +8,13 @@ import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 
+/** Số tiền (VND) tương ứng với 1 điểm tích lũy. */
+const POINTS_PER_UNIT = 10000;
+
+const pointsFor = (total: number) => Math.floor(total / POINTS_PER_UNIT);
+
+type PaymentWithOrder = Prisma.PaymentGetPayload<{ include: { order: true } }>;
+
 @Injectable()
 export class PaymentsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -16,10 +23,7 @@ export class PaymentsService {
     if (idempotencyKey.length > 255) {
       throw new BadRequestException('Idempotency-Key không được dài quá 255 ký tự');
     }
-    const existing = await this.prisma.payment.findUnique({
-      where: { idempotencyKey },
-      include: { order: true },
-    });
+    const existing = await this.findPaymentByKey(idempotencyKey);
     if (existing) return this.replay(existing, dto);
 
     try {
@@ -70,15 +74,19 @@ export class PaymentsService {
               message: 'Thanh toán giả lập thất bại; có thể thử lại bằng khóa mới',
               payment: failedPayment,
               orderStatus: OrderStatus.PAYMENT_FAILED,
+              loyaltyPointsAwarded: 0,
             };
           }
 
+          // Điểm tích lũy của đơn luôn được ghi nhận; số dư tài khoản chỉ cộng
+          // khi đơn thuộc về một người dùng đã đăng nhập.
+          const points = pointsFor(order.total);
           const updated = await tx.order.updateMany({
             where: { id: order.id, status: order.status, version: order.version },
             data: {
               status: OrderStatus.PAID,
               version: { increment: 1 },
-              loyaltyPointsAwarded: order.userId ? Math.floor(order.total / 10000) : 0,
+              loyaltyPointsAwarded: points,
             },
           });
           if (updated.count !== 1) {
@@ -88,17 +96,14 @@ export class PaymentsService {
             where: { id: payment.id },
             data: { status: PaymentStatus.SUCCEEDED },
           });
-          if (order.userId) {
-            const points = Math.floor(order.total / 10000);
-            if (points > 0) {
-              await tx.loyaltyTransaction.create({
-                data: { userId: order.userId, orderId: order.id, points },
-              });
-              await tx.user.update({
-                where: { id: order.userId },
-                data: { loyaltyPoints: { increment: points } },
-              });
-            }
+          if (order.userId && points > 0) {
+            await tx.loyaltyTransaction.create({
+              data: { userId: order.userId, orderId: order.id, points },
+            });
+            await tx.user.update({
+              where: { id: order.userId },
+              data: { loyaltyPoints: { increment: points } },
+            });
           }
 
           return {
@@ -107,23 +112,18 @@ export class PaymentsService {
             message: 'Thanh toán đơn hàng thành công qua cổng giả lập',
             payment: completedPayment,
             orderStatus: OrderStatus.PAID,
+            loyaltyPointsAwarded: points,
           };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const duplicate = await this.prisma.payment.findUnique({
-          where: { idempotencyKey },
-          include: { order: true },
-        });
+        const duplicate = await this.findPaymentByKey(idempotencyKey);
         if (duplicate) return this.replay(duplicate, dto);
       }
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-        const duplicate = await this.prisma.payment.findUnique({
-          where: { idempotencyKey },
-          include: { order: true },
-        });
+        const duplicate = await this.findPaymentByKey(idempotencyKey);
         if (duplicate) return this.replay(duplicate, dto);
         throw new ConflictException('Thanh toán đang được xử lý đồng thời; vui lòng thử lại');
       }
@@ -131,10 +131,11 @@ export class PaymentsService {
     }
   }
 
-  private replay(
-    payment: Prisma.PaymentGetPayload<{ include: { order: true } }>,
-    dto: CreatePaymentDto,
-  ) {
+  /**
+   * Giao dịch đã tồn tại với khoá này: trả lại kết quả cũ, không tạo giao dịch mới.
+   * `success` phản ánh kết quả thật của giao dịch đã lưu.
+   */
+  private replay(payment: PaymentWithOrder, dto: CreatePaymentDto) {
     if (
       payment.orderId !== dto.orderId ||
       payment.method !== dto.method ||
@@ -152,6 +153,7 @@ export class PaymentsService {
           : 'Yêu cầu này đã được xử lý trước đó',
       payment,
       orderStatus: payment.order.status,
+      loyaltyPointsAwarded: payment.order.loyaltyPointsAwarded,
     };
   }
 
@@ -165,5 +167,12 @@ export class PaymentsService {
       throw new NotFoundException(`Không tìm thấy thông tin thanh toán cho đơn hàng ${orderId}`);
     }
     return payments;
+  }
+
+  private findPaymentByKey(idempotencyKey: string): Promise<PaymentWithOrder | null> {
+    return this.prisma.payment.findUnique({
+      where: { idempotencyKey },
+      include: { order: true },
+    });
   }
 }

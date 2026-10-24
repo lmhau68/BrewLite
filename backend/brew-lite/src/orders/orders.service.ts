@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { sizeExtra, toppingById, type ToppingOption } from '../products/catalog.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 
 const transitions: Record<OrderStatus, readonly OrderStatus[]> = {
@@ -43,12 +44,26 @@ export class OrdersService {
               throw new NotFoundException(`Không tìm thấy sản phẩm có ID: ${item.productId}`);
             }
 
-            // Giá luôn lấy từ server; client supplied price is intentionally ignored.
-            const sizeSurcharge = item.size === 'M' ? 5000 : item.size === 'L' ? 10000 : 0;
-            const unitPrice = money(product.price + sizeSurcharge);
+            // Giá luôn lấy từ server; client chỉ gửi id topping, không gửi giá.
+            const toppings: ToppingOption[] = (item.toppings ?? []).map((topping) => {
+              const option = toppingById(topping.id);
+              if (!option) {
+                throw new BadRequestException(`Topping không hợp lệ: ${topping.id}`);
+              }
+              return option;
+            });
+            const toppingsTotal = toppings.reduce((sum, topping) => sum + topping.price, 0);
+            const unitPrice = money(product.price + sizeExtra(item.size) + toppingsTotal);
             const lineTotal = money(unitPrice * item.qty);
             subtotal = money(subtotal + lineTotal);
-            return { productId: item.productId, size: item.size, qty: item.qty, lineTotal };
+            return {
+              productId: item.productId,
+              size: item.size,
+              toppings: toppings.length ? (toppings as unknown as Prisma.InputJsonValue) : undefined,
+              unitPrice,
+              qty: item.qty,
+              lineTotal,
+            };
           });
 
           let discountCode: string | undefined;
@@ -116,6 +131,10 @@ export class OrdersService {
           const order = await tx.order.create({
             data: {
               userId: dto.userId ?? null,
+              customerName: dto.customerName?.trim() || null,
+              customerPhone: dto.customerPhone?.trim() || null,
+              address: dto.address?.trim() || null,
+              note: dto.note?.trim() || null,
               status: OrderStatus.PENDING,
               total: money(subtotal - discountAmount),
               discountCode,
@@ -130,7 +149,7 @@ export class OrdersService {
       );
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-        throw new ConflictException('Tồn kho vừa thay đổi, vui lòng thử đặt lại đơn hàng');
+        throw new ConflictException('Tồn kho vừa thay đổi, vui lòng thử đặt lại đơn');
       }
       throw error;
     }
@@ -185,7 +204,7 @@ export class OrdersService {
       );
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-        throw new ConflictException('Đơn hàng vừa được cập nhật, vui lòng tải lại');
+        throw new ConflictException('Trạng thái đơn hàng vừa được cập nhật, vui lòng tải lại');
       }
       throw error;
     }

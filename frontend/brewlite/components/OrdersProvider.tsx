@@ -23,7 +23,10 @@ interface OrdersContextValue {
   refresh: () => Promise<void>;
   /** Tạo đơn mới, trả về đơn đã tạo */
   placeOrder: (payload: CreateOrderPayload) => Promise<Order>;
-  /** Thanh toán đơn (mô phỏng), trả về kết quả và cập nhật danh sách */
+  /**
+   * Thanh toán đơn (mô phỏng).
+   * Kết quả đã bao gồm đơn mới nhất từ API và số điểm tích lũy được cộng.
+   */
   pay: (
     order: Order,
     method: PaymentMethod,
@@ -81,18 +84,39 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         idempotencyKey,
         mockSuccess,
       });
-      // Đồng bộ lại trạng thái đơn từ nguồn sự thật
-      try {
-        const fresh = await getOrder(order.id);
-        setOrders((prev) =>
-          prev.some((o) => o.id === fresh.id)
-            ? prev.map((o) => (o.id === fresh.id ? fresh : o))
-            : [fresh, ...prev],
-        );
-        return { ...result, order: fresh };
-      } catch {
-        return result;
+
+      // Ưu tiên đơn mới nhất do API trả về; nếu không có thì nạp lại từ API.
+      let latest = result.order;
+      if (!latest) {
+        try {
+          latest = await getOrder(order.id);
+        } catch {
+          latest = null;
+        }
       }
+      if (!latest) {
+        // API không trả về đơn: tự ghép kết quả giao dịch vào đơn đang có.
+        latest = {
+          ...order,
+          status: result.orderStatus ?? order.status,
+          loyaltyPointsAwarded: result.loyaltyPointsAwarded,
+          payment: result.payment
+            ? {
+                method: result.payment.method,
+                amount: result.payment.amount,
+                idempotencyKey: result.payment.idempotencyKey,
+                status: result.payment.status,
+                failureReason: result.payment.failureReason,
+              }
+            : order.payment,
+        };
+      }
+      setOrders((prev) =>
+        prev.some((o) => o.id === latest!.id)
+          ? prev.map((o) => (o.id === latest!.id ? latest! : o))
+          : [latest!, ...prev],
+      );
+      return { ...result, order: latest };
     },
     [],
   );

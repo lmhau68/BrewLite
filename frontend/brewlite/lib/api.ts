@@ -2,6 +2,7 @@ import { unitPriceOf } from "./cart";
 import { MOCK_PRODUCTS } from "./mock-data";
 import { TOPPINGS } from "./menu-options";
 import type {
+  CategoryId,
   CreateOrderPayload,
   Order,
   OrderLine,
@@ -9,7 +10,6 @@ import type {
   PaymentMethod,
   Product,
   SizeId,
-  ToppingOption,
 } from "./types";
 
 /**
@@ -33,11 +33,51 @@ function demoState(): string | null {
 /* Menu                                                                */
 /* ------------------------------------------------------------------ */
 
+/** Shape sản phẩm trả về từ GET /products (model Product của Prisma). */
+interface ApiProduct {
+  id: number;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  emoji?: string | null;
+  price: number;
+  imageUrl?: string | null;
+  stock: number;
+  customizable?: boolean | null;
+  bestSeller?: boolean | null;
+}
+
+const CATEGORY_IDS: readonly CategoryId[] = ["coffee", "tea", "milk-tea", "blended"];
+
+/** Chuẩn hoá danh mục từ API về CategoryId, fallback về "coffee". */
+function toCategoryId(value: string | null | undefined): CategoryId {
+  return CATEGORY_IDS.includes(value as CategoryId) ? (value as CategoryId) : "coffee";
+}
+
+/**
+ * Chuyển sản phẩm từ API sang kiểu dùng chung của frontend.
+ * API là nguồn sự thật cho giá/tồn kho; các trường trình bày thiếu thì có giá trị mặc định.
+ */
+function mapApiProduct(raw: ApiProduct): Product {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description ?? "",
+    category: toCategoryId(raw.category),
+    emoji: raw.emoji ?? "🧋",
+    price: raw.price,
+    stock: raw.stock,
+    customizable: raw.customizable ?? true,
+    bestSeller: raw.bestSeller ?? false,
+  };
+}
+
 export async function getProducts(): Promise<Product[]> {
   if (API_URL) {
     const res = await fetch(`${API_URL}/products`);
     if (!res.ok) throw new Error(`Không tải được menu (HTTP ${res.status})`);
-    return (await res.json()) as Product[];
+    const data = (await res.json()) as ApiProduct[];
+    return data.map(mapApiProduct);
   }
   await sleep(MOCK_DELAY_MS);
   const state = demoState();
@@ -46,12 +86,12 @@ export async function getProducts(): Promise<Product[]> {
   return MOCK_PRODUCTS;
 }
 
-export async function getProduct(id: number): Promise<import("./types").Product> {
+export async function getProduct(id: number): Promise<Product> {
   if (API_URL) {
     const res = await fetch(`${API_URL}/products/${id}`);
     if (res.status === 404) throw new Error("Sản phẩm không tồn tại");
     if (!res.ok) throw new Error(`Không tải được sản phẩm (HTTP ${res.status})`);
-    return (await res.json()) as Product;
+    return mapApiProduct((await res.json()) as ApiProduct);
   }
   await sleep(MOCK_DELAY_MS / 2);
   const found = MOCK_PRODUCTS.find((p) => p.id === id);
@@ -63,49 +103,59 @@ export async function getProduct(id: number): Promise<import("./types").Product>
 /* Đơn hàng - kiểu dữ liệu API                                        */
 /* ------------------------------------------------------------------ */
 
-interface ApiProduct {
+interface ApiProductRef {
   id: number;
   name: string;
-  emoji?: string;
-  imageUrl?: string;
+  emoji?: string | null;
 }
 
 interface ApiOrderItem {
   id: number;
   productId: number;
   size: string;
-  toppings?: ToppingOption[] | null;
+  toppings?: { id: string; name: string; price: number }[] | null;
+  unitPrice?: number | null;
   qty: number;
   lineTotal: number;
-  product?: ApiProduct | null;
+  product?: ApiProductRef | null;
+}
+
+interface ApiPayment {
+  id: number;
+  orderId: number;
+  idempotencyKey: string;
+  amount: number;
+  method: string;
+  status: string;
+  failureReason?: string | null;
+  createdAt: string;
 }
 
 interface ApiOrder {
   id: number;
   status: OrderStatus;
   total: number;
-  /** Có thể chưa có nếu API chưa hỗ trợ khách không đăng nhập */
+  discountCode?: string | null;
+  discountAmount?: number | null;
+  loyaltyPointsAwarded?: number | null;
   customerName?: string | null;
   customerPhone?: string | null;
   address?: string | null;
   note?: string | null;
   createdAt: string;
   items: ApiOrderItem[];
-  payment?: {
-    method: string;
-    amount: number;
-    idempotencyKey: string;
-  } | null;
+  payments?: ApiPayment[] | null;
 }
 
 /**
  * Chuyển đơn từ API (Prisma) sang kiểu dùng chung của frontend.
  *
- * Lưu ý tương thích: các trường `customerName`, `customerPhone`, `address`, `note`,
- * `toppings` có thể chưa tồn tại tuỳ phiên bản API. Giao diện phải hiển thị được
- * chứ không in ra `undefined`.
+ * Lưu ý tương thích: các trường `customerName`, `toppings` có thể chưa tồn tại tuỳ phiên bản API.
+ * Giao diện phải hiển thị được mà không in ra `undefined`.
  */
 function mapApiOrder(raw: ApiOrder): Order {
+  const payments = raw.payments ?? [];
+  const latest = [...payments].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   return {
     id: raw.id,
     status: raw.status,
@@ -127,17 +177,22 @@ function mapApiOrder(raw: ApiOrder): Order {
         size: item.size as SizeId,
         toppings,
         qty: item.qty,
-        unitPrice: item.qty > 0 ? item.lineTotal / item.qty : item.lineTotal,
+        unitPrice: item.unitPrice ?? (item.qty > 0 ? item.lineTotal / item.qty : item.lineTotal),
         lineTotal: item.lineTotal,
       };
     }),
-    payment: raw.payment
+    payment: latest
       ? {
-          method: raw.payment.method as PaymentMethod,
-          amount: raw.payment.amount,
-          idempotencyKey: raw.payment.idempotencyKey,
+          method: latest.method as PaymentMethod,
+          amount: latest.amount,
+          idempotencyKey: latest.idempotencyKey,
+          status: latest.status,
+          failureReason: latest.failureReason ?? undefined,
         }
       : null,
+    discountCode: raw.discountCode ?? null,
+    discountAmount: raw.discountAmount ?? 0,
+    loyaltyPointsAwarded: raw.loyaltyPointsAwarded ?? 0,
   };
 }
 
@@ -202,6 +257,18 @@ export interface PayOrderResult {
   success: boolean;
   message: string;
   order: Order | null;
+  /** Điểm tích lũy được cộng cho đơn (0 nếu không có) */
+  loyaltyPointsAwarded: number;
+  /** Trạng thái đơn sau khi cố gắng thanh toán */
+  orderStatus?: OrderStatus;
+  /** Giao dịch mà API trả về (dùng để hiển thị phương thức đã trả) */
+  payment?: {
+    method: PaymentMethod;
+    amount: number;
+    idempotencyKey: string;
+    status: string;
+    failureReason?: string;
+  };
 }
 
 /** Tạo đơn. Trả về đơn đã được chuẩn hoá theo kiểu Order của frontend. */
@@ -233,6 +300,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
     },
     items,
     payment: null,
+    loyaltyPointsAwarded: 0,
   };
   writeMockOrders([order, ...orders]);
   return order;
@@ -288,11 +356,34 @@ export async function payOrder(input: PayOrderInput): Promise<PayOrderResult> {
       isIdempotent?: boolean;
       message?: string;
       orderStatus?: OrderStatus;
+      loyaltyPointsAwarded?: number;
+      order?: ApiOrder;
+      payment?: {
+        method?: string;
+        amount?: number;
+        idempotencyKey?: string;
+        status?: string;
+        failureReason?: string | null;
+      };
     };
+    // Chỉ khi API báo thành công mới coi là thanh toán thành công. isIdempotent=true
+    // chỉ nói "giao dịch này đã được xử lý trước đó", không nói là thành công.
+    const success = data.success === true || data.orderStatus === "PAID";
     return {
-      success: data.isIdempotent === true || data.success === true || data.orderStatus === "PAID",
+      success,
       message: data.message ?? "",
-      order: null,
+      order: data.order ? mapApiOrder(data.order) : null,
+      loyaltyPointsAwarded: data.loyaltyPointsAwarded ?? 0,
+      orderStatus: data.orderStatus,
+      payment: data.payment
+        ? {
+            method: (data.payment.method ?? "VI_DIEN_TU") as PaymentMethod,
+            amount: data.payment.amount ?? input.amount,
+            idempotencyKey: data.payment.idempotencyKey ?? input.idempotencyKey,
+            status: data.payment.status ?? "SUCCEEDED",
+            failureReason: data.payment.failureReason ?? undefined,
+          }
+        : undefined,
     };
   }
 
@@ -304,7 +395,13 @@ export async function payOrder(input: PayOrderInput): Promise<PayOrderResult> {
   const current = orders[index];
   // Đã thanh toán rồi -> trả kết quả cũ, không tạo giao dịch mới
   if (current.payment) {
-    return { success: true, message: "Yêu cầu thanh toán đã được xử lý trước đó.", order: current };
+    return {
+      success: true,
+      message: "Yêu cầu thanh toán đã được xử lý trước đó.",
+      order: current,
+      loyaltyPointsAwarded: current.loyaltyPointsAwarded ?? 0,
+      orderStatus: current.status,
+    };
   }
 
   if (input.mockSuccess === false) {
@@ -315,21 +412,32 @@ export async function payOrder(input: PayOrderInput): Promise<PayOrderResult> {
       success: false,
       message: "Thanh toán giả lập thất bại (thẻ bị từ chối hoặc số dư không đủ).",
       order: failed,
+      loyaltyPointsAwarded: 0,
+      orderStatus: failed.status,
     };
   }
 
+  const points = Math.floor(current.total / 10000);
   const paid: Order = {
     ...current,
     status: "PAID",
+    loyaltyPointsAwarded: points,
     payment: {
       method: input.method,
       amount: input.amount,
       idempotencyKey: input.idempotencyKey,
+      status: "SUCCEEDED",
     },
   };
   orders[index] = paid;
   writeMockOrders(orders);
-  return { success: true, message: "Thanh toán đơn hàng thành công qua cổng giả lập.", order: paid };
+  return {
+    success: true,
+    message: "Thanh toán đơn hàng thành công qua cổng giả lập.",
+    order: paid,
+    loyaltyPointsAwarded: points,
+    orderStatus: paid.status,
+  };
 }
 
 /** Đọc nội dung lỗi do API trả về (NestJS trả { message: string | string[] }). */
