@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { cartCount, cartReducer, cartTotal, unitPriceOf } from "@/lib/cart";
+import {
+  cartCount,
+  cartReducer,
+  cartTotal,
+  deriveBasePrice,
+  normalizeLine,
+  unitPriceOf,
+} from "@/lib/cart";
 import { formatVND } from "@/lib/format";
 import { MOCK_PRODUCTS } from "@/lib/mock-data";
 import { TOPPINGS } from "@/lib/menu-options";
@@ -21,7 +28,7 @@ describe("unitPriceOf", () => {
   it("cộng giá size và topping", () => {
     expect(unitPriceOf(coffee, "S", [])).toBe(29000);
     expect(unitPriceOf(coffee, "L", [])).toBe(39000);
-    expect(unitPriceOf(coffee, "M", [pearl, cheese])).toBe(29000 + 5000 + 8000 + 10000);
+    expect(unitPriceOf(coffee, "M", [pearl, cheese])).toBe(29000 + 6000 + 8000 + 10000);
   });
 });
 
@@ -60,9 +67,102 @@ describe("cartReducer", () => {
   });
 
   it("tính tổng tiền và số lượng", () => {
-    const s = add(add([], "S", 2), "M", 1, []); // 2×37.000 + 1×34.000
+    const s = add(add([], "S", 2), "M", 1, []); // 2×37.000 + 1×35.000
     expect(cartCount(s)).toBe(3);
-    expect(cartTotal(s)).toBe(2 * 37000 + 34000);
+    expect(cartTotal(s)).toBe(2 * 37000 + 35000);
     expect(cartReducer(s, { type: "clear" })).toEqual([]);
+  });
+});
+
+describe("cartReducer - sửa size/topping trong giỏ", () => {
+  const add = (state: CartLine[], size: "S" | "M" | "L" = "S", qty = 1, toppings = [pearl]) =>
+    cartReducer(state, { type: "add", product: coffee, size, toppings, qty });
+
+  it("đổi size thì tính lại đơn giá, giữ nguyên số lượng", () => {
+    const s = add([], "S", 2);
+    const updated = cartReducer(s, { type: "update", key: s[0].key, size: "L", toppings: [pearl] });
+    expect(updated).toHaveLength(1);
+    expect(updated[0]).toMatchObject({ size: "L", qty: 2, unitPrice: 29000 + 10000 + 8000 });
+  });
+
+  it("đổi topping thì tính lại đơn giá", () => {
+    const s = add([], "S", 1, [pearl]); // 37.000
+    const updated = cartReducer(s, {
+      type: "update",
+      key: s[0].key,
+      size: "S",
+      toppings: [cheese], // +10.000
+    });
+    expect(updated[0].unitPrice).toBe(39000);
+    expect(updated[0].toppings).toEqual([cheese]);
+  });
+
+  it("bỏ topping thì đơn giá về giá gốc", () => {
+    const s = add([], "S", 1, [pearl]);
+    const updated = cartReducer(s, { type: "update", key: s[0].key, size: "S", toppings: [] });
+    expect(updated[0].unitPrice).toBe(29000);
+    expect(updated[0].toppings).toEqual([]);
+  });
+
+  it("khoá dòng đổi theo size/topping mới", () => {
+    const s = add([], "S", 1);
+    const updated = cartReducer(s, { type: "update", key: s[0].key, size: "M", toppings: [] });
+    expect(updated[0].key).not.toBe(s[0].key);
+  });
+
+  it("gộp vào dòng đã có cùng cấu hình", () => {
+    const s = add(add([], "S", 1), "M", 2);
+    expect(s).toHaveLength(2);
+    // Sửa dòng size S thành size M (cùng topping) -> trùng dòng M đang có -> gộp lại
+    const updated = cartReducer(s, { type: "update", key: s[0].key, size: "M", toppings: [pearl] });
+    expect(updated).toHaveLength(1);
+    expect(updated[0].size).toBe("M");
+    expect(updated[0].qty).toBe(3);
+  });
+
+  it("không sửa được món không có tuỳ chọn", () => {
+    const water = MOCK_PRODUCTS.find((p) => !p.customizable)!;
+    const s = cartReducer([], { type: "add", product: water, size: "S", toppings: [], qty: 1 });
+    const updated = cartReducer(s, { type: "update", key: s[0].key, size: "L", toppings: [] });
+    expect(updated).toEqual(s);
+  });
+
+  it("bỏ qua dòng không tồn tại", () => {
+    const s = add([], "S", 1);
+    expect(cartReducer(s, { type: "update", key: "khong-ton-tai", size: "L", toppings: [] })).toEqual(s);
+  });
+
+  it("giữ tổng tiền khớp sau khi sửa", () => {
+    const s = add([], "S", 1, [pearl]);
+    const updated = cartReducer(s, { type: "update", key: s[0].key, size: "M", toppings: [pearl] });
+    expect(cartTotal(updated)).toBe(updated[0].unitPrice * updated[0].qty);
+  });
+});
+
+describe("giỏ hàng lưu từ trước (chưa có basePrice)", () => {
+  it("khôi phục được giá gốc để sửa size/topping", () => {
+    const legacy: CartLine = {
+      key: "1|M|pearl",
+      productId: 1,
+      name: "Cà phê sữa đá",
+      emoji: "☕",
+      size: "M",
+      toppings: [pearl],
+      qty: 1,
+      unitPrice: 29000 + 6000 + 8000,
+    };
+    expect(deriveBasePrice(legacy)).toBe(29000);
+
+    const normalized = normalizeLine(legacy);
+    expect(normalized.basePrice).toBe(29000);
+    expect(normalized.customizable).toBe(true);
+
+    const updated = cartReducer([normalized], {
+      type: "update",
+      key: normalized.key,
+      size: "L",
+      toppings: [],
+    });
+    expect(updated[0].unitPrice).toBe(39000);
   });
 });

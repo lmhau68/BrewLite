@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
-import { cartCount, cartReducer, cartTotal, type CartAction } from "@/lib/cart";
+import { cartCount, cartReducer, cartTotal, normalizeLines, type CartAction } from "@/lib/cart";
 import type { CartLine } from "@/lib/types";
 
 interface CartContextValue {
@@ -29,7 +29,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as CartLine[];
+        // Chuẩn hoá ngay khi nạp: dòng giỏ lưu từ trước chưa có `basePrice`
+        // thì bổ sung giá gốc để sửa được size/topping.
+        const parsed = normalizeLines(JSON.parse(raw) as CartLine[]);
         pendingHydrate.current = parsed;
         dispatch({ type: "hydrate", lines: parsed });
         return;
