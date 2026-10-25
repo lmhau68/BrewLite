@@ -79,7 +79,7 @@ export function OrderDetailScreen({ id }: { id: number }) {
       const result = await pay(order, method, idemKey, !mockFail);
       if (result.success) {
         setOrder(result.order ?? order);
-        setPointsAwarded(result.loyaltyPointsAwarded);
+        setPointsAwarded(result.loyaltyPointsAwarded ?? 0);
       } else {
         setPayError(result.message || "Thanh toán không thành công.");
         // Lần thử sau phải dùng khoá mới: API từ chối tái sử dụng khoá cũ

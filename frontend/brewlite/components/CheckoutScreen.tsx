@@ -28,6 +28,7 @@ import {
 } from "@/lib/orders";
 import type { Order, PaymentMethod } from "@/lib/types";
 import { useResetOnHide } from "@/lib/use-reset-on-hide";
+import { useAuth } from "./AuthProvider";
 import { useCart } from "./CartProvider";
 import { OrderLines, type DisplayLine } from "./OrderLines";
 import { OrderStatusBadge } from "./OrderStatusBadge";
@@ -46,15 +47,14 @@ const labelClass = "mb-1 block text-sm font-semibold text-espresso";
  * Backend chỉ nhận `method` + `amount`, nên dữ liệu thẻ không rời khỏi giao diện;
  * phần kiểm tra bắt buộc + định dạng nằm ở `lib/card.ts`.
  */
-
 export function CheckoutScreen() {
   const { lines, count, total, dispatch } = useCart();
   const { placeOrder, pay } = useOrders();
+  const { user } = useAuth();
 
   const [step, setStep] = useState<Step>("form");
   const [form, setForm] = useState({ name: "", phone: "", address: "", note: "" });
   const [errors, setErrors] = useState<CheckoutErrors>({});
-  const [promotionCode, setPromotionCode] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("VI_DIEN_TU");
   /** Bật để thử nhánh cổng thanh toán bị từ chối (ADR-005) */
   const [mockFail, setMockFail] = useState(false);
@@ -62,6 +62,8 @@ export function CheckoutScreen() {
   const [idemKey, setIdemKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [payError, setPayError] = useState("");
+  /** Mã khuyến mãi (không bắt buộc) */
+  const [promotionCode, setPromotionCode] = useState("");
   /** Điểm tích lũy do API trả về sau khi thanh toán thành công */
   const [pointsAwarded, setPointsAwarded] = useState(0);
   /** Thông tin thẻ ngân hàng (ảo), chỉ nằm ở state của giao diện */
@@ -151,7 +153,7 @@ export function CheckoutScreen() {
     setPayError("");
     const session = sessionRef.current;
     try {
-      const created = await placeOrder(buildOrderPayload(lines, form, promotionCode));
+const created = await placeOrder(buildOrderPayload(lines, form, promotionCode));
       // Đã rời trang trong lúc chờ API: bỏ qua kết quả, không áp vào lần đặt mới.
       if (sessionRef.current !== session) return;
       setOrder(created);
@@ -182,7 +184,7 @@ export function CheckoutScreen() {
     try {
       const result = await pay(order, method, idemKey, !mockFail);
       if (result.success) {
-        // API đã ghi nhận thanh toán: xoá giỏ hàng ngay để đơn sau không dính món cũ.
+// API đã ghi nhận thanh toán: xoá giỏ hàng ngay để đơn sau không dính món cũ.
         // Việc này luôn thực hiện, kể cả khi người dùng đã rời trang, vì server đã trừ món.
         dispatch({ type: "clear" });
         // Đã rời trang trong lúc chờ API: bỏ qua cập nhật giao diện.
@@ -199,21 +201,19 @@ export function CheckoutScreen() {
                   }
                 : prev),
         );
-        setPointsAwarded(result.loyaltyPointsAwarded);
+        setPointsAwarded(result.loyaltyPointsAwarded ?? 0);
         setStep("done");
       } else {
         // Cập nhật trạng thái đơn (ví dụ PAYMENT_FAILED) để badge hiển thị đúng
         if (sessionRef.current !== session) return;
         if (result.order) setOrder(result.order);
+        // Khoá cũ đã gắn với giao dịch thất bại; muốn thử lại phải dùng khoá mới (backend trả 409 nếu dùng lại)
+        if (order) setIdemKey(createIdempotencyKey(`ord${order.id}`));
         setPayError(result.message || "Thanh toán không thành công.");
-        // Lần thử sau phải dùng khoá mới: API từ chối tái sử dụng khoá cũ
-        // cho một yêu cầu khác (ADR-005).
-        setIdemKey(createIdempotencyKey(`ord${order.id}`));
       }
     } catch (err) {
       if (sessionRef.current !== session) return;
       setPayError(err instanceof Error ? err.message : "Không thanh toán được");
-      setIdemKey(createIdempotencyKey(`ord${order.id}`));
     } finally {
       if (sessionRef.current === session) setBusy(false);
     }
@@ -256,6 +256,19 @@ export function CheckoutScreen() {
 
               <form onSubmit={handleCreateOrder} noValidate className="space-y-3 rounded-2xl border border-line bg-surface p-4">
                 <h2 className="font-semibold text-espresso">Thông tin người nhận</h2>
+                <p className="rounded-xl bg-cream px-3 py-2 text-xs text-muted">
+                  {user ? (
+                    <>Đặt đơn với tài khoản <strong>{user.email}</strong>.</>
+                  ) : (
+                    <>
+                      Bạn đang đặt đơn với tư cách khách.{" "}
+                      <Link href="/login" className="font-semibold text-caramel-dark underline">
+                        Đăng nhập
+                      </Link>{" "}
+                      để lưu lịch sử và tích điểm.
+                    </>
+                  )}
+                </p>
 
                 <div>
                   <label htmlFor="checkout-name" className={labelClass}>
@@ -423,7 +436,7 @@ export function CheckoutScreen() {
                 ))}
               </div>
 
-              {method === "THE_NGAN_HANG" && (
+{method === "THE_NGAN_HANG" && (
                 <div className="mt-3 space-y-3 rounded-xl bg-cream p-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs text-muted">
@@ -596,13 +609,13 @@ export function CheckoutScreen() {
                 Thanh toán {formatVND(order.total)} qua {PAYMENT_METHOD_LABEL[method].toLowerCase()}. Đơn sẽ
                 được chuẩn bị ngay.
               </p>
+              {pointsAwarded > 0 && (
+                <p className="mt-1 text-sm font-medium text-amber-700">
+                  Bạn được tích lũy {pointsAwarded} điểm
+                </p>
+              )}
             </div>
             <OrderStatusBadge status={order.status} />
-            {pointsAwarded > 0 && (
-              <p className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
-                Bạn được tích lũy {pointsAwarded} điểm
-              </p>
-            )}
             <div className="mt-1 flex w-full flex-col gap-2">
               <Link
                 href={`/orders/${order.id}`}

@@ -3,24 +3,29 @@
 import { useMemo, useState } from "react";
 import { unitPriceOf, MAX_QTY_PER_LINE } from "@/lib/cart";
 import { formatVND } from "@/lib/format";
-import { TOPPINGS } from "@/lib/menu-options";
-import type { Product, SizeId, ToppingOption } from "@/lib/types";
+import type { MenuOptions, Product, SizeId, ToppingOption } from "@/lib/types";
 import { ProductOptions } from "./ProductOptions";
 import { Sheet } from "./Sheet";
 
 interface Props {
   product: Product;
+  /** Size/topping lấy từ API (GET /options) */
+  options: MenuOptions;
   onClose: () => void;
   onAdd: (product: Product, size: SizeId, toppings: ToppingOption[], qty: number) => void;
 }
 
-export function ProductSheet({ product, onClose, onAdd }: Props) {
-  const [size, setSize] = useState<SizeId>("S");
+export function ProductSheet({ product, options, onClose, onAdd }: Props) {
+  const { sizes, toppings: toppingOptions } = options;
+  const [size, setSize] = useState<SizeId>(sizes[0]?.id ?? "S");
   const [toppingIds, setToppingIds] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
 
-  const toppings = useMemo(() => TOPPINGS.filter((t) => toppingIds.includes(t.id)), [toppingIds]);
-  const unit = unitPriceOf(product, size, toppings);
+  const toppings = useMemo(
+    () => toppingOptions.filter((t) => toppingIds.includes(t.id)),
+    [toppingOptions, toppingIds],
+  );
+  const unit = unitPriceOf(product, size, toppings, sizes);
 
   const toggleTopping = (id: string) =>
     setToppingIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
@@ -76,6 +81,8 @@ export function ProductSheet({ product, onClose, onAdd }: Props) {
         <ProductOptions
           size={size}
           toppingIds={toppingIds}
+          sizes={sizes}
+          toppings={toppingOptions}
           onSizeChange={setSize}
           onToggleTopping={toggleTopping}
         />

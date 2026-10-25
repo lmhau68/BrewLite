@@ -1,13 +1,23 @@
 import { SIZES, TOPPINGS } from "./menu-options";
-import type { CartLine, Product, SizeId, ToppingOption } from "./types";
+import type { CartLine, Product, SizeId, SizeOption, ToppingOption } from "./types";
 
-export function unitPriceFromBase(basePrice: number, size: SizeId, toppings: ToppingOption[]): number {
-  const sizeExtra = SIZES.find((s) => s.id === size)?.extra ?? 0;
+export function unitPriceFromBase(
+  basePrice: number,
+  size: SizeId,
+  toppings: ToppingOption[],
+  sizes: SizeOption[] = SIZES,
+): number {
+  const sizeExtra = sizes.find((s) => s.id === size)?.extra ?? 0;
   return basePrice + sizeExtra + toppings.reduce((sum, t) => sum + t.price, 0);
 }
 
-export function unitPriceOf(product: Product, size: SizeId, toppings: ToppingOption[]): number {
-  return unitPriceFromBase(product.price, size, toppings);
+export function unitPriceOf(
+  product: Product,
+  size: SizeId,
+  toppings: ToppingOption[],
+  sizes: SizeOption[] = SIZES,
+): number {
+  return unitPriceFromBase(product.price, size, toppings, sizes);
 }
 
 export function lineKey(productId: number, size: SizeId, toppings: ToppingOption[]): string {
@@ -24,8 +34,8 @@ function sortToppings(toppings: ToppingOption[]): ToppingOption[] {
  * Khôi phục giá gốc (size S) của một dòng giỏ.
  * Dùng cho dòng lưu từ trước khi có trường `basePrice`.
  */
-export function deriveBasePrice(line: CartLine): number {
-  const sizeExtra = SIZES.find((s) => s.id === line.size)?.extra ?? 0;
+export function deriveBasePrice(line: CartLine, sizes: SizeOption[] = SIZES): number {
+  const sizeExtra = sizes.find((s) => s.id === line.size)?.extra ?? 0;
   const toppingsTotal = line.toppings.reduce((sum, t) => sum + t.price, 0);
   return Math.max(0, line.unitPrice - sizeExtra - toppingsTotal);
 }
@@ -51,7 +61,15 @@ export function normalizeLines(lines: CartLine[]): CartLine[] {
 }
 
 export type CartAction =
-  | { type: "add"; product: Product; size: SizeId; toppings: ToppingOption[]; qty: number }
+  | {
+      type: "add";
+      product: Product;
+      size: SizeId;
+      toppings: ToppingOption[];
+      qty: number;
+      /** Đơn giá 1 ly tính theo size/topping từ API; bỏ trống = dùng bảng giá dự phòng */
+      unitPrice?: number;
+    }
   | { type: "inc"; key: string }
   | { type: "dec"; key: string }
   | { type: "remove"; key: string }
@@ -82,7 +100,7 @@ export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
           size: action.size,
           toppings: action.toppings,
           qty: Math.min(MAX_QTY_PER_LINE, action.qty),
-          unitPrice: unitPriceOf(action.product, action.size, action.toppings),
+unitPrice: action.unitPrice ?? unitPriceOf(action.product, action.size, action.toppings),
           basePrice: action.product.price,
           customizable: action.product.customizable,
         },

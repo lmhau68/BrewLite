@@ -8,6 +8,7 @@ export const CATEGORIES: { id: CategoryId | "all"; label: string; emoji: string 
   { id: "blended", label: "Đá xay", emoji: "🥤" },
 ];
 
+/** Giá trị dự phòng (khớp backend). Giao diện ưu tiên danh sách lấy từ GET /options. */
 export const SIZES: SizeOption[] = [
   { id: "S", label: "Nhỏ", extra: 0 },
   { id: "M", label: "Vừa", extra: 6000 },

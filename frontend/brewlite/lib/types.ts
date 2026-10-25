@@ -13,6 +13,7 @@ export interface Product {
   /** Cho phép chọn size/topping */
   customizable: boolean;
   bestSeller?: boolean;
+  imageUrl?: string;
 }
 
 export type SizeId = "S" | "M" | "L";
@@ -27,6 +28,22 @@ export interface ToppingOption {
   id: string;
   name: string;
   price: number;
+}
+
+/** Danh sách size/topping do API trả về (GET /options). */
+export interface MenuOptions {
+  sizes: SizeOption[];
+  toppings: ToppingOption[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Xác thực                                                            */
+/* ------------------------------------------------------------------ */
+
+export interface AuthSession {
+  accessToken: string;
+  userId: number;
+  email: string;
 }
 
 export interface CartLine {
@@ -87,7 +104,6 @@ export interface OrderPayment {
   method: PaymentMethod;
   amount: number;
   idempotencyKey: string;
-  /** Trạng thái giao dịch: PROCESSING | SUCCEEDED | FAILED */
   status?: string;
   failureReason?: string;
 }
@@ -101,11 +117,8 @@ export interface Order {
   customer: OrderCustomer;
   items: OrderLine[];
   payment?: OrderPayment | null;
-  /** Mã khuyến mãi đã áp dụng (nếu có) */
   discountCode?: string | null;
-  /** Số tiền được giảm (VND) */
   discountAmount?: number;
-  /** Điểm tích lũy được cộng cho đơn này */
   loyaltyPointsAwarded?: number;
 }
 
@@ -123,5 +136,6 @@ export interface CreateOrderPayload {
   address?: string;
   note?: string;
   items: CreateOrderItemPayload[];
+  /** Mã khuyến mãi (nếu có) */
   promotionCode?: string;
 }

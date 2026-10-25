@@ -3,12 +3,16 @@
 import { useId } from "react";
 import { formatVND } from "@/lib/format";
 import { SIZES, TOPPINGS } from "@/lib/menu-options";
-import type { SizeId } from "@/lib/types";
+import type { SizeId, SizeOption, ToppingOption } from "@/lib/types";
 
 interface Props {
   size: SizeId;
   /** Danh sách id topping đang chọn */
   toppingIds: string[];
+  /** Size lấy từ API (GET /options); bỏ trống thì dùng bảng giá dự phòng */
+  sizes?: SizeOption[];
+  /** Topping lấy từ API (GET /options); bỏ trống thì dùng bảng giá dự phòng */
+  toppings?: ToppingOption[];
   onSizeChange: (size: SizeId) => void;
   onToggleTopping: (id: string) => void;
 }
@@ -17,7 +21,14 @@ interface Props {
  * Bộ chọn size + topping dùng chung cho thêm món mới và sửa dòng trong giỏ.
  * Component điều khiển hoàn toàn từ bên ngoài nên dùng được cho cả hai luồng.
  */
-export function ProductOptions({ size, toppingIds, onSizeChange, onToggleTopping }: Props) {
+export function ProductOptions({
+  size,
+  toppingIds,
+  sizes = SIZES,
+  toppings = TOPPINGS,
+  onSizeChange,
+  onToggleTopping,
+}: Props) {
   // Tên nhóm radio phải duy nhất để không lẫn giữa các sheet đang mở.
   const groupName = useId();
 
@@ -26,7 +37,7 @@ export function ProductOptions({ size, toppingIds, onSizeChange, onToggleTopping
       <fieldset className="pb-4">
         <legend className="mb-2 font-semibold text-espresso">Chọn size</legend>
         <div className="grid grid-cols-3 gap-2">
-          {SIZES.map((s) => (
+          {sizes.map((s) => (
             <label
               key={s.id}
               className="cursor-pointer rounded-xl border border-line bg-surface p-2 text-center text-sm has-[:checked]:border-espresso has-[:checked]:bg-espresso has-[:checked]:text-cream"
@@ -46,30 +57,32 @@ export function ProductOptions({ size, toppingIds, onSizeChange, onToggleTopping
         </div>
       </fieldset>
 
-      <fieldset>
-        <legend className="mb-2 font-semibold text-espresso">
-          Topping <span className="font-normal text-muted">(tuỳ chọn)</span>
-        </legend>
-        <div className="space-y-2">
-          {TOPPINGS.map((t) => (
-            <label
-              key={t.id}
-              className="flex cursor-pointer items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5 has-[:checked]:border-caramel has-[:checked]:bg-caramel/10"
-            >
-              <span className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={toppingIds.includes(t.id)}
-                  onChange={() => onToggleTopping(t.id)}
-                  className="size-4 accent-[var(--color-caramel-dark)]"
-                />
-                <span className="text-sm">{t.name}</span>
-              </span>
-              <span className="text-sm text-muted">+{formatVND(t.price)}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {toppings.length > 0 && (
+        <fieldset>
+          <legend className="mb-2 font-semibold text-espresso">
+            Topping <span className="font-normal text-muted">(tuỳ chọn)</span>
+          </legend>
+          <div className="space-y-2">
+            {toppings.map((t) => (
+              <label
+                key={t.id}
+                className="flex cursor-pointer items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5 has-[:checked]:border-caramel has-[:checked]:bg-caramel/10"
+              >
+                <span className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={toppingIds.includes(t.id)}
+                    onChange={() => onToggleTopping(t.id)}
+                    className="size-4 accent-[var(--color-caramel-dark)]"
+                  />
+                  <span className="text-sm">{t.name}</span>
+                </span>
+                <span className="text-sm text-muted">+{formatVND(t.price)}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
     </>
   );
 }

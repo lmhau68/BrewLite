@@ -2,19 +2,25 @@ import { cleanup as cleanupRender, render, screen, waitFor, within } from "@test
 import userEvent from "@testing-library/user-event";
 import { Activity, useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AuthProvider } from "@/components/AuthProvider";
 import { CartProvider } from "@/components/CartProvider";
 import { MenuScreen } from "@/components/MenuScreen";
 import { MOCK_PRODUCTS } from "@/lib/mock-data";
 
-vi.mock("@/lib/api", () => ({ getProducts: vi.fn() }));
-import { getProducts } from "@/lib/api";
+vi.mock("@/lib/api", () => ({ getProducts: vi.fn(), getOptions: vi.fn() }));
+import { getOptions, getProducts } from "@/lib/api";
+import { SIZES, TOPPINGS } from "@/lib/menu-options";
 
 const mockedGet = vi.mocked(getProducts);
+const mockedGetOptions = vi.mocked(getOptions);
+
 
 function setup() {
   render(
     <CartProvider>
-      <MenuScreen />
+      <AuthProvider>
+        <MenuScreen />
+      </AuthProvider>
     </CartProvider>,
   );
   return userEvent.setup();
@@ -22,6 +28,8 @@ function setup() {
 
 beforeEach(() => {
   mockedGet.mockReset();
+  mockedGetOptions.mockReset();
+  mockedGetOptions.mockResolvedValue({ sizes: SIZES, toppings: TOPPINGS });
 });
 
 describe("MenuScreen - trạng thái", () => {
@@ -141,9 +149,11 @@ describe("MenuScreen - rời trang", () => {
     const user = userEvent.setup();
     render(
       <CartProvider>
-        <PageWithActivity>
-          <MenuScreen />
-        </PageWithActivity>
+        <AuthProvider>
+          <PageWithActivity>
+            <MenuScreen />
+          </PageWithActivity>
+        </AuthProvider>
       </CartProvider>,
     );
 
