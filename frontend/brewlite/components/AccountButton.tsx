@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useCart } from "./CartProvider";
-import { useOrders } from "./OrdersProvider";
+import { useOrdersOptional } from "./OrdersProvider";
 
 /** Nút tài khoản ở header: "Đăng nhập" khi chưa có phiên, menu người dùng khi đã đăng nhập. */
 export function AccountButton() {
   const { user, logout } = useAuth();
   const { dispatch } = useCart();
-  const { orders } = useOrders();
+  const orders = useOrdersOptional()?.orders ?? [];
   const points = useMemo(
     () => orders.reduce((sum, o) => sum + (o.loyaltyPointsAwarded ?? 0), 0),
     [orders],
