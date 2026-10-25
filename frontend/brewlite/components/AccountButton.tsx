@@ -5,12 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useCart } from "./CartProvider";
 import { useOrdersOptional } from "./OrdersProvider";
+import type { Order } from "@/lib/types";
+
+const NO_ORDERS: Order[] = [];
 
 /** Nút tài khoản ở header: "Đăng nhập" khi chưa có phiên, menu người dùng khi đã đăng nhập. */
 export function AccountButton() {
   const { user, logout } = useAuth();
   const { dispatch } = useCart();
-  const orders = useOrdersOptional()?.orders ?? [];
+  const orders = useOrdersOptional()?.orders ?? NO_ORDERS;
   const points = useMemo(
     () => orders.reduce((sum, o) => sum + (o.loyaltyPointsAwarded ?? 0), 0),
     [orders],
