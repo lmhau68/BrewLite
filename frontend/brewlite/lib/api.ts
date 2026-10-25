@@ -222,6 +222,15 @@ function writeMockOrders(orders: Order[]): void {
     /* private mode / đầy bộ nhớ -> bỏ qua */
   }
 }
+/** Khách vãng lai: xoá đơn lưu cục bộ sau khi thanh toán để người dùng sau không xem được. */
+export function clearGuestData(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(MOCK_ORDERS_KEY);
+  } catch {
+    /* bỏ qua */
+  }
+}
 
 /** Dựng dòng đơn giả từ payload, dùng bảng giá phía client (giống hệt server). */
 function mockOrderLines(payload: CreateOrderPayload): OrderLine[] {
@@ -327,7 +336,8 @@ export async function getOrders(): Promise<Order[]> {
   if (API_URL) {
     // Đã đăng nhập: chỉ lấy đơn của tài khoản này
     const user = getSessionUser();
-    const res = await authFetch(`${API_URL}/orders${user ? `?userId=${user.id}` : ""}`);
+    if (!user) return [];
+    const res = await authFetch(`${API_URL}/orders?userId=${user.id}`);
     if (!res.ok) throw new Error(`Không tải được lịch sử đơn (HTTP ${res.status})`);
     const data = (await res.json()) as ApiOrder[];
     return data.map(mapApiOrder);
@@ -435,7 +445,7 @@ export async function payOrder(input: PayOrderInput): Promise<PayOrderResult> {
     };
   }
 
-  const points = Math.floor(current.total / 10000);
+  const points = getSessionUser() ? Math.floor(current.total / 10000) : 0;
   const paid: Order = {
     ...current,
     status: "PAID",
@@ -449,6 +459,7 @@ export async function payOrder(input: PayOrderInput): Promise<PayOrderResult> {
   };
   orders[index] = paid;
   writeMockOrders(orders);
+  /** Khách vãng lai: xoá đơn lưu cục bộ sau khi thanh toán để người dùng sau không xem được. */
   return {
     success: true,
     message: "Thanh toán đơn hàng thành công qua cổng giả lập.",

@@ -7,12 +7,14 @@ import { CheckoutScreen } from "@/components/CheckoutScreen";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import type { CartLine, Order } from "@/lib/types";
 import { AuthProvider } from "@/components/AuthProvider";
+import { saveToken, clearToken } from "@/lib/auth";
 
 vi.mock("@/lib/api", () => ({
   createOrder: vi.fn(),
   payOrder: vi.fn(),
   getOrders: vi.fn(),
   getOrder: vi.fn(),
+  clearGuestData: vi.fn(),
 }));
 import { createOrder, getOrder, getOrders, payOrder } from "@/lib/api";
 
@@ -201,6 +203,9 @@ describe("CheckoutScreen - thanh toán", () => {
 
   it("hiển thị điểm tích lũy do API trả về ở màn Đặt đơn xong", async () => {
     seedCart();
+    const payload = btoa(JSON.stringify({ sub: 7, email: "a@b.vn", exp: Math.floor(Date.now() / 1000) + 3600 }))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    saveToken(`x.${payload}.y`);
     mockedPayOrder.mockResolvedValueOnce({
       success: true,
       message: "Thanh toán thành công",
@@ -214,6 +219,26 @@ describe("CheckoutScreen - thanh toán", () => {
     await user.click(screen.getByRole("button", { name: /Thanh toán 29\.000đ/ }));
 
     expect(await screen.findByText("Bạn được tích lũy 3 điểm")).toBeInTheDocument();
+    clearToken();
+  });
+
+  it("khách chưa đăng nhập không thấy điểm tích lũy dù API trả về", async () => {
+    seedCart();
+    clearToken();
+    mockedPayOrder.mockResolvedValueOnce({
+      success: true,
+      message: "Thanh toán thành công",
+      order: null,
+      loyaltyPointsAwarded: 3,
+    });
+    const user = setup();
+    await screen.findByText("Cà phê sữa đá");
+    await goToPayment(user);
+
+    await user.click(screen.getByRole("button", { name: /Thanh toán 29\.000đ/ }));
+
+    expect(await screen.findByText(/Đơn #1 đã được xác nhận/)).toBeInTheDocument();
+    expect(screen.queryByText(/được tích lũy/)).not.toBeInTheDocument();
   });
 
   it("xoay khoá idempotency khi thanh toán thất bại để lần thử sau không bị kẹt", async () => {
