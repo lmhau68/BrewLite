@@ -3,25 +3,29 @@ import userEvent from "@testing-library/user-event";
 import { Activity, useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "@/components/AuthProvider";
+import { OrdersProvider } from "@/components/OrdersProvider";
 import { CartProvider } from "@/components/CartProvider";
 import { MenuScreen } from "@/components/MenuScreen";
 import { MOCK_PRODUCTS } from "@/lib/mock-data";
 
-vi.mock("@/lib/api", () => ({ getProducts: vi.fn(), getOptions: vi.fn() }));
-import { getOptions, getProducts } from "@/lib/api";
+vi.mock("@/lib/api", () => ({ getProducts: vi.fn(), getOptions: vi.fn(), getOrders: vi.fn() }));
+import { getOptions, getOrders, getProducts } from "@/lib/api";
 import { SIZES, TOPPINGS } from "@/lib/menu-options";
 
 const mockedGet = vi.mocked(getProducts);
 const mockedGetOptions = vi.mocked(getOptions);
+const mockedGetOrders = vi.mocked(getOrders);
 
 
 function setup() {
   render(
-    <CartProvider>
-      <AuthProvider>
-        <MenuScreen />
-      </AuthProvider>
-    </CartProvider>,
+    <AuthProvider>
+      <CartProvider>
+        <OrdersProvider>
+          <MenuScreen />
+        </OrdersProvider>
+      </CartProvider>
+    </AuthProvider>,
   );
   return userEvent.setup();
 }
@@ -30,6 +34,8 @@ beforeEach(() => {
   mockedGet.mockReset();
   mockedGetOptions.mockReset();
   mockedGetOptions.mockResolvedValue({ sizes: SIZES, toppings: TOPPINGS });
+  mockedGetOrders.mockReset();
+  mockedGetOrders.mockResolvedValue([]);
 });
 
 describe("MenuScreen - trạng thái", () => {

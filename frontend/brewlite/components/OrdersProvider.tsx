@@ -121,3 +121,7 @@ export function useOrders(): OrdersContextValue {
   if (!ctx) throw new Error("useOrders phải được dùng bên trong <OrdersProvider>");
   return ctx;
 }
+
+export function useOrdersOptional(): OrdersContextValue | null {
+  return useContext(OrdersContext);
+}

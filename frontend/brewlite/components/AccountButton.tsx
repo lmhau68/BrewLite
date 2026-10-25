@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
+import { useCart } from "./CartProvider";
+import { useOrdersOptional } from "./OrdersProvider";
+import type { Order } from "@/lib/types";
+
+const NO_ORDERS: Order[] = [];
 
 /** Nút tài khoản ở header: "Đăng nhập" khi chưa có phiên, menu người dùng khi đã đăng nhập. */
 export function AccountButton() {
   const { user, logout } = useAuth();
+  const { dispatch } = useCart();
+  const orders = useOrdersOptional()?.orders ?? NO_ORDERS;
+  const points = useMemo(
+    () => orders.reduce((sum, o) => sum + (o.loyaltyPointsAwarded ?? 0), 0),
+    [orders],
+  );
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -56,6 +67,9 @@ export function AccountButton() {
           <p className="truncate px-3 py-2 text-sm text-muted" title={user.email}>
             {user.email}
           </p>
+          <p className="px-3 pb-2 text-sm font-semibold text-caramel-dark">
+            ⭐ Điểm tích luỹ: {points}
+          </p>
           <Link
             href="/orders"
             role="menuitem"
@@ -70,6 +84,7 @@ export function AccountButton() {
             onClick={() => {
               setOpen(false);
               logout();
+              dispatch({ type: "clear" });
             }}
             className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50"
           >

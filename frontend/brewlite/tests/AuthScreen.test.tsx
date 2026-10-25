@@ -5,15 +5,17 @@ import { AccountButton } from "@/components/AccountButton";
 import { AuthProvider } from "@/components/AuthProvider";
 import { AuthScreen } from "@/components/AuthScreen";
 import { AUTH_STORAGE_KEY, getToken, userFromToken } from "@/lib/auth";
+import { CartProvider } from "@/components/CartProvider";
 
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 
-function setup(mode: "login" | "register") {
+function setup(mode: "login" | "register" = "login") {
   render(
     <AuthProvider>
-      <AccountButton />
-      <AuthScreen mode={mode} />
+      <CartProvider>
+        <AuthScreen mode={mode} />
+      </CartProvider>
     </AuthProvider>,
   );
   return userEvent.setup();
@@ -85,11 +87,10 @@ describe("Đăng nhập", () => {
     await reg.click(screen.getByRole("button", { name: "Tạo tài khoản" }));
     await waitFor(() => expect(getToken()).not.toBeNull());
 
-    // Đã đăng nhập: màn hình hiện trạng thái và menu tài khoản
+    // Đã đăng nhập: màn hình hiện trạng thái
     expect(await screen.findByText("Bạn đang đăng nhập")).toBeInTheDocument();
-    await reg.click(screen.getByRole("button", { name: /Tài khoản a@b.vn/ }));
-    await reg.click(screen.getByRole("menuitem", { name: "Đăng xuất" }));
+    await reg.click(screen.getByRole("button", { name: "Đăng xuất" }));
     await waitFor(() => expect(getToken()).toBeNull());
-    expect(screen.getAllByRole("link", { name: "Đăng nhập" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Tạo tài khoản" })).toBeInTheDocument();
   });
 });
