@@ -6,6 +6,7 @@ import { getOptions, getProducts } from "@/lib/api";
 import { formatVND } from "@/lib/format";
 import { CATEGORIES, SIZES, TOPPINGS } from "@/lib/menu-options";
 import type { CategoryId, MenuOptions, Product, SizeId, ToppingOption } from "@/lib/types";
+import { useResetOnHide } from "@/lib/use-reset-on-hide";
 import { AccountButton } from "./AccountButton";
 import { CartSheet } from "./CartSheet";
 import { useCart } from "./CartProvider";
@@ -31,20 +32,20 @@ export function MenuScreen() {
   const [toast, setToast] = useState("");
 
   const load = useCallback(async () => {
-  setStatus("loading");
-  try {
-    const [prods, opts] = await Promise.all([
-      getProducts(),
-      getOptions().catch(() => null),
-    ]);
-    setProducts(prods);
-    if (opts) setOptions(opts);
-    setStatus("ready");
-  } catch (e) {
-    setError(e instanceof Error ? e.message : "Đã xảy ra lỗi không xác định");
-    setStatus("error");
-  }
-}, []);
+    setStatus("loading");
+    try {
+      const [prods, opts] = await Promise.all([
+        getProducts(),
+        getOptions().catch(() => null),
+      ]);
+      setProducts(prods);
+      if (opts) setOptions(opts);
+      setStatus("ready");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Đã xảy ra lỗi không xác định");
+      setStatus("error");
+    }
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- tải dữ liệu lần đầu khi mount
@@ -76,6 +77,17 @@ export function MenuScreen() {
     setQuery("");
     setCategory("all");
   };
+
+  /**
+   * Sheet là UI tạm (mở bằng thao tác một chạm). Next.js giữ page cũ bằng
+   * <Activity> nên nếu không đóng lại, quay lại menu sẽ thấy sheet vẫn mở.
+   * Bộ lọc tìm kiếm thì giữ lại vì người dùng cố ý chọn.
+   */
+  const closeSheets = useCallback(() => {
+    setCartOpen(false);
+    setSelected(null);
+  }, []);
+  useResetOnHide(closeSheets);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-background pb-28 shadow-xl">
