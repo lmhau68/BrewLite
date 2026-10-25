@@ -6,6 +6,7 @@ import { getProducts } from "@/lib/api";
 import { formatVND } from "@/lib/format";
 import { CATEGORIES } from "@/lib/menu-options";
 import type { CategoryId, Product, SizeId, ToppingOption } from "@/lib/types";
+import { useResetOnHide } from "@/lib/use-reset-on-hide";
 import { CartSheet } from "./CartSheet";
 import { useCart } from "./CartProvider";
 import { EmptyState, ErrorState, MenuSkeleton } from "./MenuStates";
@@ -69,6 +70,17 @@ export function MenuScreen() {
     setQuery("");
     setCategory("all");
   };
+
+  /**
+   * Sheet là UI tạm (mở bằng thao tác một chạm). Next.js giữ page cũ bằng
+   * <Activity> nên nếu không đóng lại, quay lại menu sẽ thấy sheet vẫn mở.
+   * Bộ lọc tìm kiếm thì giữ lại vì người dùng cố ý chọn.
+   */
+  const closeSheets = useCallback(() => {
+    setCartOpen(false);
+    setSelected(null);
+  }, []);
+  useResetOnHide(closeSheets);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-background pb-28 shadow-xl">

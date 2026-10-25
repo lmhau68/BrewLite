@@ -1,8 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
 import { formatVND } from "@/lib/format";
+import {
+  DEMO_CARD,
+  EMPTY_CARD,
+  formatCardCvv,
+  formatCardExpiry,
+  formatCardNumber,
+  hasCardErrors,
+  validateCard,
+  type CardDetails,
+  type CardErrors,
+} from "@/lib/card";
 import {
   buildOrderPayload,
   createIdempotencyKey,
@@ -16,6 +27,7 @@ import {
   type CheckoutErrors,
 } from "@/lib/orders";
 import type { Order, PaymentMethod } from "@/lib/types";
+import { useResetOnHide } from "@/lib/use-reset-on-hide";
 import { useCart } from "./CartProvider";
 import { OrderLines, type DisplayLine } from "./OrderLines";
 import { OrderStatusBadge } from "./OrderStatusBadge";
@@ -30,21 +42,10 @@ const inputClass =
 const labelClass = "mb-1 block text-sm font-semibold text-espresso";
 
 /**
- * Số thẻ ảo dùng cho demo. Backend chỉ nhận `method` + `amount`, nên các ô này
- * chỉ để luồng demo trông giống cổng thanh toán thật, không được gửi lên API.
+ * Luồng "Thẻ ngân hàng" yêu cầu đủ 4 trường: số thẻ, tên chủ thẻ, hạn thẻ, CVV.
+ * Backend chỉ nhận `method` + `amount`, nên dữ liệu thẻ không rời khỏi giao diện;
+ * phần kiểm tra bắt buộc + định dạng nằm ở `lib/card.ts`.
  */
-const DEMO_CARD = {
-  number: "4242 4242 4242 4242",
-  holder: "NGUYEN VAN A",
-  expiry: "12/28",
-  cvv: "123",
-};
-
-/** Chuẩn hoá số thẻ về dạng 4 nhóm số để hiển thị. */
-function formatCardNumber(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 16);
-  return digits.replace(/(.{4})/g, "$1 ").trim();
-}
 
 export function CheckoutScreen() {
   const { lines, count, total, dispatch } = useCart();
@@ -63,8 +64,42 @@ export function CheckoutScreen() {
   const [payError, setPayError] = useState("");
   /** Điểm tích lũy do API trả về sau khi thanh toán thành công */
   const [pointsAwarded, setPointsAwarded] = useState(0);
-  /** Số thẻ ảo cho demo, chỉ nằm ở state của giao diện */
-  const [card, setCard] = useState(DEMO_CARD);
+  /** Thông tin thẻ ngân hàng (ảo), chỉ nằm ở state của giao diện */
+  const [card, setCard] = useState<CardDetails>(EMPTY_CARD);
+  /** Lỗi của các ô thẻ, chỉ hiện khi chọn phương thức "Thẻ ngân hàng" */
+  const [cardErrors, setCardErrors] = useState<CardErrors>({});
+
+  /**
+   * Phiên đặt hàng hiện tại. Mỗi lần rời trang, phiên được tăng lên để kết quả
+   * của các lệnh đang chạy (tạo đơn / thanh toán) không áp nhầm vào lần đặt hàng sau.
+   */
+  const sessionRef = useRef(0);
+
+  /** Xoá sạch state của lần đặt hàng hiện tại, đưa màn checkout về bước 1. */
+  const resetCheckout = useCallback(() => {
+    sessionRef.current += 1;
+    setStep("form");
+    setForm({ name: "", phone: "", address: "", note: "" });
+    setErrors({});
+    setPromotionCode("");
+    setMethod("VI_DIEN_TU");
+    setMockFail(false);
+    setOrder(null);
+    setIdemKey("");
+    setBusy(false);
+    setPayError("");
+    setPointsAwarded(0);
+    setCard(EMPTY_CARD);
+    setCardErrors({});
+  }, []);
+
+  /**
+   * Next.js 16 (cacheComponents) giữ page cũ trong DOM bằng React <Activity> thay
+   * vì unmount, nên state của client component vẫn còn nguyên khi quay lại trang.
+   * Vì vậy mỗi lần vào trang checkout là một lần đặt hàng mới: rời trang thì reset,
+   * quay lại thì thấy bước nhập thông tin chứ không phải màn "đặt đơn xong" cũ.
+   */
+  useResetOnHide(resetCheckout);
 
   const cartLines: DisplayLine[] = useMemo(
     () =>
@@ -99,6 +134,12 @@ export function CheckoutScreen() {
     setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
+  /** Gõ vào ô thẻ: cập nhật giá trị và xoá lỗi của chính ô đó. */
+  const setCardField = (key: keyof CardDetails, value: string) => {
+    setCard((prev) => ({ ...prev, [key]: value }));
+    setCardErrors((prev) => ({ ...prev, [key]: undefined }));
+  };
+
   /** Bước 1 → 2: kiểm tra thông tin rồi tạo đơn ở API */
   const handleCreateOrder = async (e: FormEvent) => {
     e.preventDefault();
@@ -108,27 +149,45 @@ export function CheckoutScreen() {
 
     setBusy(true);
     setPayError("");
+    const session = sessionRef.current;
     try {
       const created = await placeOrder(buildOrderPayload(lines, form, promotionCode));
+      // Đã rời trang trong lúc chờ API: bỏ qua kết quả, không áp vào lần đặt mới.
+      if (sessionRef.current !== session) return;
       setOrder(created);
       setIdemKey(createIdempotencyKey(`ord${created.id}`));
       setStep("payment");
     } catch (err) {
+      if (sessionRef.current !== session) return;
       setPayError(err instanceof Error ? err.message : "Không tạo được đơn hàng");
     } finally {
-      setBusy(false);
+      if (sessionRef.current === session) setBusy(false);
     }
   };
 
   /** Bước 2 → 3: thanh toán, dùng lại đúng một khoá idempotency cho cả đơn */
   const handlePay = async () => {
     if (!order) return;
+
+    // Thẻ ngân hàng: 4 ô thẻ là bắt buộc, thiếu hoặc sai định dạng thì không gọi API.
+    if (method === "THE_NGAN_HANG") {
+      const nextCardErrors = validateCard(card);
+      setCardErrors(nextCardErrors);
+      if (hasCardErrors(nextCardErrors)) return;
+    }
+
     setBusy(true);
     setPayError("");
+    const session = sessionRef.current;
     try {
       const result = await pay(order, method, idemKey, !mockFail);
       if (result.success) {
-        // API đã ghi nhận thanh toán: cập nhật trạng thái + điểm tích lũy ngay.
+        // API đã ghi nhận thanh toán: xoá giỏ hàng ngay để đơn sau không dính món cũ.
+        // Việc này luôn thực hiện, kể cả khi người dùng đã rời trang, vì server đã trừ món.
+        dispatch({ type: "clear" });
+        // Đã rời trang trong lúc chờ API: bỏ qua cập nhật giao diện.
+        if (sessionRef.current !== session) return;
+        // Cập nhật trạng thái + điểm tích lũy ngay.
         setOrder(
           result.order ??
             ((prev) =>
@@ -141,11 +200,10 @@ export function CheckoutScreen() {
                 : prev),
         );
         setPointsAwarded(result.loyaltyPointsAwarded);
-        // Xoá giỏ hàng ngay khi thanh toán thành công để đơn sau không dính món cũ.
-        dispatch({ type: "clear" });
         setStep("done");
       } else {
         // Cập nhật trạng thái đơn (ví dụ PAYMENT_FAILED) để badge hiển thị đúng
+        if (sessionRef.current !== session) return;
         if (result.order) setOrder(result.order);
         setPayError(result.message || "Thanh toán không thành công.");
         // Lần thử sau phải dùng khoá mới: API từ chối tái sử dụng khoá cũ
@@ -153,10 +211,11 @@ export function CheckoutScreen() {
         setIdemKey(createIdempotencyKey(`ord${order.id}`));
       }
     } catch (err) {
+      if (sessionRef.current !== session) return;
       setPayError(err instanceof Error ? err.message : "Không thanh toán được");
       setIdemKey(createIdempotencyKey(`ord${order.id}`));
     } finally {
-      setBusy(false);
+      if (sessionRef.current === session) setBusy(false);
     }
   };
 
@@ -349,7 +408,11 @@ export function CheckoutScreen() {
                       name="paymentMethod"
                       value={m.id}
                       checked={method === m.id}
-                      onChange={() => setMethod(m.id)}
+                      onChange={() => {
+                        setMethod(m.id);
+                        setCardErrors({});
+                        setPayError("");
+                      }}
                       className="size-4 accent-[var(--color-caramel-dark)]"
                     />
                     <span aria-hidden className="text-lg">
@@ -362,68 +425,116 @@ export function CheckoutScreen() {
 
               {method === "THE_NGAN_HANG" && (
                 <div className="mt-3 space-y-3 rounded-xl bg-cream p-3">
-                  <p className="text-xs text-muted">
-                    Thông tin thẻ dưới đây chỉ để demo, không được gửi lên máy chủ.
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs text-muted">
+                      Thông tin thẻ dưới đây chỉ để demo, không được gửi lên máy chủ.
+                      <span className="mt-0.5 block font-semibold text-espresso">
+                        Các ô <span aria-hidden className="text-caramel-dark">*</span> là bắt buộc.
+                      </span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCard(DEMO_CARD);
+                        setCardErrors({});
+                        setPayError("");
+                      }}
+                      className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-medium text-espresso hover:bg-background"
+                    >
+                      Điền thẻ demo
+                    </button>
+                  </div>
                   <div>
                     <label htmlFor="card-number" className="mb-1 block text-xs font-semibold text-espresso">
-                      Số thẻ
+                      Số thẻ <span aria-hidden className="text-caramel-dark">*</span>
                     </label>
                     <input
                       id="card-number"
                       name="cardNumber"
                       inputMode="numeric"
                       autoComplete="cc-number"
+                      required
                       value={card.number}
-                      onChange={(e) => setCard((c) => ({ ...c, number: formatCardNumber(e.target.value) }))}
+                      onChange={(e) => setCardField("number", formatCardNumber(e.target.value))}
+                      aria-invalid={Boolean(cardErrors.number)}
+                      aria-describedby={cardErrors.number ? "card-number-error" : undefined}
                       className={inputClass}
                       placeholder="4242 4242 4242 4242"
                     />
+                    {cardErrors.number && (
+                      <p id="card-number-error" role="alert" className="mt-1 text-xs text-red-600">
+                        {cardErrors.number}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="card-holder" className="mb-1 block text-xs font-semibold text-espresso">
-                      Tên chủ thẻ
+                      Tên chủ thẻ <span aria-hidden className="text-caramel-dark">*</span>
                     </label>
                     <input
                       id="card-holder"
                       name="cardHolder"
                       autoComplete="cc-name"
+                      required
                       value={card.holder}
-                      onChange={(e) => setCard((c) => ({ ...c, holder: e.target.value }))}
+                      onChange={(e) => setCardField("holder", e.target.value)}
+                      aria-invalid={Boolean(cardErrors.holder)}
+                      aria-describedby={cardErrors.holder ? "card-holder-error" : undefined}
                       className={inputClass}
                       placeholder="NGUYEN VAN A"
                     />
+                    {cardErrors.holder && (
+                      <p id="card-holder-error" role="alert" className="mt-1 text-xs text-red-600">
+                        {cardErrors.holder}
+                      </p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="card-expiry" className="mb-1 block text-xs font-semibold text-espresso">
-                        Hạn thẻ
+                        Hạn thẻ <span aria-hidden className="text-caramel-dark">*</span>
                       </label>
                       <input
                         id="card-expiry"
                         name="cardExpiry"
                         inputMode="numeric"
                         autoComplete="cc-exp"
+                        required
                         value={card.expiry}
-                        onChange={(e) => setCard((c) => ({ ...c, expiry: e.target.value }))}
+                        onChange={(e) => setCardField("expiry", formatCardExpiry(e.target.value))}
+                        aria-invalid={Boolean(cardErrors.expiry)}
+                        aria-describedby={cardErrors.expiry ? "card-expiry-error" : undefined}
                         className={inputClass}
                         placeholder="MM/YY"
                       />
+                      {cardErrors.expiry && (
+                        <p id="card-expiry-error" role="alert" className="mt-1 text-xs text-red-600">
+                          {cardErrors.expiry}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label htmlFor="card-cvv" className="mb-1 block text-xs font-semibold text-espresso">
-                        CVV
+                        CVV <span aria-hidden className="text-caramel-dark">*</span>
                       </label>
                       <input
                         id="card-cvv"
                         name="cardCvv"
                         inputMode="numeric"
                         autoComplete="cc-csc"
+                        required
                         value={card.cvv}
-                        onChange={(e) => setCard((c) => ({ ...c, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                        onChange={(e) => setCardField("cvv", formatCardCvv(e.target.value))}
+                        aria-invalid={Boolean(cardErrors.cvv)}
+                        aria-describedby={cardErrors.cvv ? "card-cvv-error" : undefined}
                         className={inputClass}
                         placeholder="123"
                       />
+                      {cardErrors.cvv && (
+                        <p id="card-cvv-error" role="alert" className="mt-1 text-xs text-red-600">
+                          {cardErrors.cvv}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -439,6 +550,12 @@ export function CheckoutScreen() {
                 Mô phỏng thẻ bị từ chối (kiểm thử nhánh thất bại)
               </label>
             </section>
+
+            {hasCardErrors(cardErrors) && (
+              <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                Vui lòng nhập đầy đủ và đúng định dạng thông tin thẻ ngân hàng.
+              </p>
+            )}
 
             {payError && (
               <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">

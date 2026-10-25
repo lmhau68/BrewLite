@@ -118,7 +118,8 @@ export function validateCheckout(customer: {
 }
 
 export function hasErrors(errors: CheckoutErrors): boolean {
-  return Object.keys(errors).length > 0;
+  // Ô đã sửa được gán `undefined` nên phải bỏ qua, chỉ tính lỗi thật.
+  return Object.values(errors).some((message) => Boolean(message));
 }
 
 /* ------------------------------------------------------------------ */

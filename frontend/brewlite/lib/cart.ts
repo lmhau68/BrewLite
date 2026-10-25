@@ -1,13 +1,53 @@
-import { SIZES } from "./menu-options";
+import { SIZES, TOPPINGS } from "./menu-options";
 import type { CartLine, Product, SizeId, ToppingOption } from "./types";
 
-export function unitPriceOf(product: Product, size: SizeId, toppings: ToppingOption[]): number {
+export function unitPriceFromBase(basePrice: number, size: SizeId, toppings: ToppingOption[]): number {
   const sizeExtra = SIZES.find((s) => s.id === size)?.extra ?? 0;
-  return product.price + sizeExtra + toppings.reduce((sum, t) => sum + t.price, 0);
+  return basePrice + sizeExtra + toppings.reduce((sum, t) => sum + t.price, 0);
+}
+
+export function unitPriceOf(product: Product, size: SizeId, toppings: ToppingOption[]): number {
+  return unitPriceFromBase(product.price, size, toppings);
 }
 
 export function lineKey(productId: number, size: SizeId, toppings: ToppingOption[]): string {
   return `${productId}|${size}|${toppings.map((t) => t.id).sort().join(",")}`;
+}
+
+/** Sắp xếp topping theo thứ tự trong catalog để hiển thị ổn định. */
+function sortToppings(toppings: ToppingOption[]): ToppingOption[] {
+  const order = new Map(TOPPINGS.map((t, i) => [t.id, i]));
+  return [...toppings].sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+}
+
+/**
+ * Khôi phục giá gốc (size S) của một dòng giỏ.
+ * Dùng cho dòng lưu từ trước khi có trường `basePrice`.
+ */
+export function deriveBasePrice(line: CartLine): number {
+  const sizeExtra = SIZES.find((s) => s.id === line.size)?.extra ?? 0;
+  const toppingsTotal = line.toppings.reduce((sum, t) => sum + t.price, 0);
+  return Math.max(0, line.unitPrice - sizeExtra - toppingsTotal);
+}
+
+/**
+ * Bổ sung các trường còn thiếu của một dòng giỏ (giá gốc, cờ tuỳ chọn).
+ * Trả về chính object cũ nếu đã đủ dữ liệu - giữ nguyên tham chiếu để
+ * provider biết giỏ đã nạp xong và bắt đầu ghi xuống localStorage.
+ */
+export function normalizeLine(line: CartLine): CartLine {
+  const toppings = Array.isArray(line.toppings) ? line.toppings : [];
+  const basePrice = line.basePrice ?? deriveBasePrice({ ...line, toppings });
+  const customizable = line.customizable ?? true;
+  if (toppings === line.toppings && basePrice === line.basePrice && customizable === line.customizable) {
+    return line;
+  }
+  return { ...line, toppings, basePrice, customizable };
+}
+
+/** Chuẩn hoá cả giỏ hàng (dùng khi nạp từ localStorage). */
+export function normalizeLines(lines: CartLine[]): CartLine[] {
+  return lines.map(normalizeLine);
 }
 
 export type CartAction =
@@ -15,6 +55,8 @@ export type CartAction =
   | { type: "inc"; key: string }
   | { type: "dec"; key: string }
   | { type: "remove"; key: string }
+  /** Sửa size/topping của một dòng đã có trong giỏ */
+  | { type: "update"; key: string; size: SizeId; toppings: ToppingOption[] }
   | { type: "clear" }
   | { type: "hydrate"; lines: CartLine[] };
 
@@ -41,6 +83,8 @@ export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
           toppings: action.toppings,
           qty: Math.min(MAX_QTY_PER_LINE, action.qty),
           unitPrice: unitPriceOf(action.product, action.size, action.toppings),
+          basePrice: action.product.price,
+          customizable: action.product.customizable,
         },
       ];
     }
@@ -54,10 +98,51 @@ export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
         .filter((l) => l.qty > 0);
     case "remove":
       return state.filter((l) => l.key !== action.key);
+    case "update": {
+      const index = state.findIndex((l) => l.key === action.key);
+      if (index === -1) return state;
+      const current = normalizeLine(state[index]);
+      // Món không có tuỳ chọn (nước suối...) thì không cho sửa.
+      if (current.customizable === false) return state;
+
+      const basePrice = current.basePrice ?? deriveBasePrice(current);
+      const toppings = sortToppings(action.toppings);
+      const newKey = lineKey(current.productId, action.size, toppings);
+      const unitPrice = unitPriceFromBase(basePrice, action.size, toppings);
+
+      // Cấu hình không đổi: chỉ cập nhật lại thông tin của dòng.
+      if (newKey === current.key) {
+        return state.map((l, i) =>
+          i === index ? { ...current, size: action.size, toppings, unitPrice, basePrice } : l,
+        );
+      }
+
+      // Trùng cấu hình với một dòng đã có trong giỏ -> gộp số lượng.
+      const otherIndex = state.findIndex((l) => l.key === newKey);
+      if (otherIndex !== -1) {
+        const other = normalizeLine(state[otherIndex]);
+        const merged: CartLine = {
+          ...other,
+          qty: Math.min(MAX_QTY_PER_LINE, other.qty + current.qty),
+        };
+        return state.filter((_, i) => i !== index && i !== otherIndex).concat(merged);
+      }
+
+      return state.map((l, i) =>
+        i === index
+          ? { ...current, key: newKey, size: action.size, toppings, unitPrice, basePrice }
+          : l,
+      );
+    }
     case "clear":
       return [];
-    case "hydrate":
-      return action.lines;
+    case "hydrate": {
+      const normalized = action.lines.map(normalizeLine);
+      // Giữ nguyên tham chiếu mảng khi dữ liệu đã chuẩn hoá: CartProvider
+      // so sánh tham chiếu để biết đã nạp xong và bắt đầu ghi xuống localStorage.
+      const unchanged = normalized.every((l, i) => l === action.lines[i]);
+      return unchanged ? action.lines : normalized;
+    }
   }
 }
 

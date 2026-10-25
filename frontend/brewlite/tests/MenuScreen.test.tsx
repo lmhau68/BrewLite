@@ -1,5 +1,6 @@
 import { cleanup as cleanupRender, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Activity, useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CartProvider } from "@/components/CartProvider";
 import { MenuScreen } from "@/components/MenuScreen";
@@ -114,5 +115,45 @@ describe("Giỏ hàng - lưu trữ", () => {
     cleanupRender();
     setup();
     expect(await screen.findByTestId("cart-badge")).toHaveTextContent("1");
+  });
+});
+
+/**
+ * Next.js 16 (cacheComponents) giữ page cũ trong DOM bằng React <Activity> thay vì
+ * unmount, nên state của client component vẫn còn nguyên khi quay lại trang.
+ * Harness này mô phỏng đúng cơ chế đó.
+ */
+function PageWithActivity({ children }: { children: ReactNode }) {
+  const [visible, setVisible] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setVisible((v) => !v)}>
+        Rời trang
+      </button>
+      <Activity mode={visible ? "visible" : "hidden"}>{children}</Activity>
+    </>
+  );
+}
+
+describe("MenuScreen - rời trang", () => {
+  it("đóng sheet tạm khi quay lại menu", async () => {
+    mockedGet.mockResolvedValue(MOCK_PRODUCTS);
+    const user = userEvent.setup();
+    render(
+      <CartProvider>
+        <PageWithActivity>
+          <MenuScreen />
+        </PageWithActivity>
+      </CartProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Chọn Cà phê sữa đá" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // Rời trang (page bị ẩn bằng <Activity>) rồi quay lại lần nữa.
+    await user.click(screen.getByRole("button", { name: "Rời trang" }));
+    await user.click(screen.getByRole("button", { name: "Rời trang" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

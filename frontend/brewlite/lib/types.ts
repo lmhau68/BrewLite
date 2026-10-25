@@ -40,6 +40,10 @@ export interface CartLine {
   qty: number;
   /** Đơn giá 1 ly đã gồm size + topping */
   unitPrice: number;
+  /** Giá gốc (size S) của sản phẩm - dùng để tính lại đơn giá khi sửa size/topping */
+  basePrice?: number;
+  /** Sản phẩm có tuỳ chọn size/topping không (món cố định thì không sửa được) */
+  customizable?: boolean;
 }
 
 /* ------------------------------------------------------------------ */

@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { unitPriceOf, MAX_QTY_PER_LINE } from "@/lib/cart";
 import { formatVND } from "@/lib/format";
-import { SIZES, TOPPINGS } from "@/lib/menu-options";
+import { TOPPINGS } from "@/lib/menu-options";
 import type { Product, SizeId, ToppingOption } from "@/lib/types";
+import { ProductOptions } from "./ProductOptions";
 import { Sheet } from "./Sheet";
 
 interface Props {
@@ -72,53 +73,12 @@ export function ProductSheet({ product, onClose, onAdd }: Props) {
       </div>
 
       {product.customizable ? (
-        <>
-          <fieldset className="pb-4">
-            <legend className="mb-2 font-semibold text-espresso">Chọn size</legend>
-            <div className="grid grid-cols-3 gap-2">
-              {SIZES.map((s) => (
-                <label
-                  key={s.id}
-                  className="cursor-pointer rounded-xl border border-line bg-surface p-2 text-center text-sm has-[:checked]:border-espresso has-[:checked]:bg-espresso has-[:checked]:text-cream"
-                >
-                  <input
-                    type="radio"
-                    name="size"
-                    value={s.id}
-                    checked={size === s.id}
-                    onChange={() => setSize(s.id)}
-                    className="sr-only"
-                  />
-                  <span className="block font-semibold">{s.id} · {s.label}</span>
-                  <span className="block text-xs opacity-80">{s.extra ? `+${formatVND(s.extra)}` : "Giá gốc"}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend className="mb-2 font-semibold text-espresso">Topping <span className="font-normal text-muted">(tuỳ chọn)</span></legend>
-            <div className="space-y-2">
-              {TOPPINGS.map((t) => (
-                <label
-                  key={t.id}
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5 has-[:checked]:border-caramel has-[:checked]:bg-caramel/10"
-                >
-                  <span className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={toppingIds.includes(t.id)}
-                      onChange={() => toggleTopping(t.id)}
-                      className="size-4 accent-[var(--color-caramel-dark)]"
-                    />
-                    <span className="text-sm">{t.name}</span>
-                  </span>
-                  <span className="text-sm text-muted">+{formatVND(t.price)}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        </>
+        <ProductOptions
+          size={size}
+          toppingIds={toppingIds}
+          onSizeChange={setSize}
+          onToggleTopping={toggleTopping}
+        />
       ) : (
         <p className="rounded-xl bg-cream p-3 text-sm text-muted">Món này không có tuỳ chọn size hoặc topping.</p>
       )}
