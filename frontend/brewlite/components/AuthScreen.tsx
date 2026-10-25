@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth";
 import { useAuth } from "./AuthProvider";
 import { SubPageHeader } from "./SubPageHeader";
+import { useCart } from "./CartProvider";
 
 type Mode = "login" | "register";
 
@@ -42,6 +43,7 @@ const COPY = {
 export function AuthScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
   const { user, login, register, logout } = useAuth();
+  const { dispatch } = useCart();
   const copy = COPY[mode];
 
   const [form, setForm] = useState({ email: "", password: "", confirm: "" });
@@ -54,6 +56,12 @@ export function AuthScreen({ mode }: { mode: Mode }) {
     setForm((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => ({ ...prev, [key]: undefined }));
     setServerError("");
+  };
+  const resetForm = () => {
+    setForm({ email: "", password: "", confirm: "" });
+    setErrors({});
+    setServerError("");
+    setShowPassword(false);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -68,9 +76,12 @@ export function AuthScreen({ mode }: { mode: Mode }) {
     try {
       if (mode === "login") await login(form.email, form.password);
       else await register(form.email, form.password);
+      dispatch({ type: "clear" });
+      resetForm(); // thêm dòng này
       router.replace(safeNextPath(window.location.search));
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Đã xảy ra lỗi không xác định");
+    } finally {
       setBusy(false);
     }
   };
@@ -94,7 +105,11 @@ export function AuthScreen({ mode }: { mode: Mode }) {
               </Link>
               <button
                 type="button"
-                onClick={logout}
+                onClick={() => {
+                  logout();
+                  dispatch({ type: "clear" });
+                  resetForm();  
+                }}
                 className="rounded-full border border-espresso px-5 py-2.5 text-sm font-medium text-espresso hover:bg-espresso hover:text-cream"
               >
                 Đăng xuất
