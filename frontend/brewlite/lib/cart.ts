@@ -1,8 +1,13 @@
 import { SIZES } from "./menu-options";
-import type { CartLine, Product, SizeId, ToppingOption } from "./types";
+import type { CartLine, Product, SizeId, SizeOption, ToppingOption } from "./types";
 
-export function unitPriceOf(product: Product, size: SizeId, toppings: ToppingOption[]): number {
-  const sizeExtra = SIZES.find((s) => s.id === size)?.extra ?? 0;
+export function unitPriceOf(
+  product: Product,
+  size: SizeId,
+  toppings: ToppingOption[],
+  sizes: SizeOption[] = SIZES,
+): number {
+  const sizeExtra = sizes.find((s) => s.id === size)?.extra ?? 0;
   return product.price + sizeExtra + toppings.reduce((sum, t) => sum + t.price, 0);
 }
 
@@ -11,7 +16,15 @@ export function lineKey(productId: number, size: SizeId, toppings: ToppingOption
 }
 
 export type CartAction =
-  | { type: "add"; product: Product; size: SizeId; toppings: ToppingOption[]; qty: number }
+  | {
+      type: "add";
+      product: Product;
+      size: SizeId;
+      toppings: ToppingOption[];
+      qty: number;
+      /** Đơn giá 1 ly tính theo size/topping từ API; bỏ trống = dùng bảng giá dự phòng */
+      unitPrice?: number;
+    }
   | { type: "inc"; key: string }
   | { type: "dec"; key: string }
   | { type: "remove"; key: string }
@@ -40,7 +53,7 @@ export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
           size: action.size,
           toppings: action.toppings,
           qty: Math.min(MAX_QTY_PER_LINE, action.qty),
-          unitPrice: unitPriceOf(action.product, action.size, action.toppings),
+          unitPrice: action.unitPrice ?? unitPriceOf(action.product, action.size, action.toppings),
         },
       ];
     }

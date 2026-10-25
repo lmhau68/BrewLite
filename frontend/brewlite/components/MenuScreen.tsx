@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getProducts } from "@/lib/api";
+import { getOptions, getProducts } from "@/lib/api";
 import { formatVND } from "@/lib/format";
-import { CATEGORIES } from "@/lib/menu-options";
-import type { CategoryId, Product, SizeId, ToppingOption } from "@/lib/types";
+import { CATEGORIES, SIZES, TOPPINGS } from "@/lib/menu-options";
+import type { CategoryId, MenuOptions, Product, SizeId, ToppingOption } from "@/lib/types";
+import { AccountButton } from "./AccountButton";
 import { CartSheet } from "./CartSheet";
 import { useCart } from "./CartProvider";
 import { EmptyState, ErrorState, MenuSkeleton } from "./MenuStates";
@@ -22,6 +23,7 @@ export function MenuScreen() {
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
+  const [options, setOptions] = useState<MenuOptions>({ sizes: SIZES, toppings: TOPPINGS });
   const [category, setCategory] = useState<CategoryId | "all">("all");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Product | null>(null);
@@ -29,15 +31,20 @@ export function MenuScreen() {
   const [toast, setToast] = useState("");
 
   const load = useCallback(async () => {
-    setStatus("loading");
-    try {
-      setProducts(await getProducts());
-      setStatus("ready");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Đã xảy ra lỗi không xác định");
-      setStatus("error");
-    }
-  }, []);
+  setStatus("loading");
+  try {
+    const [prods, opts] = await Promise.all([
+      getProducts(),
+      getOptions().catch(() => null),
+    ]);
+    setProducts(prods);
+    if (opts) setOptions(opts);
+    setStatus("ready");
+  } catch (e) {
+    setError(e instanceof Error ? e.message : "Đã xảy ra lỗi không xác định");
+    setStatus("error");
+  }
+}, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- tải dữ liệu lần đầu khi mount
@@ -76,9 +83,10 @@ export function MenuScreen() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-widest text-caramel-light">BrewLite</p>
-            <h1 className="text-xl font-bold">Hôm nay bạn uống gì?</h1>
+            <h1 className="text-lg leading-tight font-bold">Hôm nay bạn uống gì?</h1>
           </div>
           <div className="flex items-center gap-2">
+            <AccountButton />
             <Link
               href="/orders"
               aria-label="Lịch sử đơn hàng"
@@ -165,7 +173,7 @@ export function MenuScreen() {
         </div>
       )}
 
-      {selected && <ProductSheet product={selected} onClose={() => setSelected(null)} onAdd={handleAdd} />}
+      {selected && <ProductSheet product={selected} options={options} onClose={() => setSelected(null)} onAdd={handleAdd} />}
       {cartOpen && <CartSheet onClose={() => setCartOpen(false)} />}
     </div>
   );

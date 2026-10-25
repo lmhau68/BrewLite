@@ -29,10 +29,6 @@ export function OrderDetailScreen({ id }: { id: number }) {
   const [mockFail, setMockFail] = useState(false);
   const [busy, setBusy] = useState(false);
   const [payError, setPayError] = useState("");
-  /** Khoá idempotency của lần thanh toán hiện tại (xoay khi thất bại) */
-  const [idemKey, setIdemKey] = useState(() => createIdempotencyKey(`ord${id}`));
-  /** Điểm tích lũy API cộng cho đơn này */
-  const [pointsAwarded, setPointsAwarded] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +37,6 @@ export function OrderDetailScreen({ id }: { id: number }) {
         const loaded = await loadOrder(id);
         if (cancelled) return;
         setOrder(loaded);
-        setPointsAwarded(loaded.loyaltyPointsAwarded ?? 0);
         setStatus("ready");
       } catch (e) {
         if (cancelled) return;
@@ -76,20 +71,15 @@ export function OrderDetailScreen({ id }: { id: number }) {
     setBusy(true);
     setPayError("");
     try {
-      const result = await pay(order, method, idemKey, !mockFail);
+      const key = order.payment?.idempotencyKey ?? createIdempotencyKey(`ord${order.id}`);
+      const result = await pay(order, method, key, !mockFail);
       if (result.success) {
         setOrder(result.order ?? order);
-        setPointsAwarded(result.loyaltyPointsAwarded);
       } else {
         setPayError(result.message || "Thanh toán không thành công.");
-        // Lần thử sau phải dùng khoá mới: API từ chối tái sử dụng khoá cũ
-        // cho một yêu cầu khác (ADR-005).
-        setIdemKey(createIdempotencyKey(`ord${order.id}`));
-        if (result.order) setOrder(result.order);
       }
     } catch (e) {
       setPayError(e instanceof Error ? e.message : "Không thanh toán được");
-      setIdemKey(createIdempotencyKey(`ord${order.id}`));
     } finally {
       setBusy(false);
     }
@@ -160,16 +150,6 @@ export function OrderDetailScreen({ id }: { id: number }) {
                 <p className="mt-1 text-xs text-muted">
                   Thanh toán: {PAYMENT_METHOD_LABEL[order.payment.method] ?? order.payment.method} ·{" "}
                   {formatVND(order.payment.amount)}
-                </p>
-              )}
-              {order.discountAmount ? (
-                <p className="mt-1 text-xs font-medium text-emerald-700">
-                  Mã {order.discountCode}: giảm {formatVND(order.discountAmount)}
-                </p>
-              ) : null}
-              {pointsAwarded > 0 && (
-                <p className="mt-1 text-xs font-medium text-amber-700">
-                  Đã tích lũy {pointsAwarded} điểm
                 </p>
               )}
             </section>

@@ -1,9 +1,11 @@
 import { unitPriceOf } from "./cart";
+import { authFetch, getSessionUser } from "./auth";
 import { MOCK_PRODUCTS } from "./mock-data";
-import { TOPPINGS } from "./menu-options";
+import { SIZES, TOPPINGS } from "./menu-options";
 import type {
   CategoryId,
   CreateOrderPayload,
+  MenuOptions,
   Order,
   OrderLine,
   OrderStatus,
@@ -226,7 +228,7 @@ function mockOrderLines(payload: CreateOrderPayload): OrderLine[] {
   return payload.items.map((item) => {
     const product = MOCK_PRODUCTS.find((p) => p.id === item.productId);
     const toppings = TOPPINGS.filter((t) => item.toppings.some((x) => x.id === t.id));
-    const unitPrice = product ? unitPriceOf(product, item.size, toppings) : 0;
+    const unitPrice = product ? unitPriceOf(product, item.size, toppings, SIZES) : 0;
     return {
       productId: item.productId,
       name: product?.name ?? `Sản phẩm #${item.productId}`,
@@ -243,7 +245,19 @@ function mockOrderLines(payload: CreateOrderPayload): OrderLine[] {
 /* ------------------------------------------------------------------ */
 /* Đơn hàng - API công khai                                           */
 /* ------------------------------------------------------------------ */
-
+/** Size/topping cho menu. Khong co API_URL -> dung gia tri du phong. */
+export async function getOptions(): Promise<MenuOptions> {
+  if (API_URL) {
+    const res = await fetch(`${API_URL}/options`);
+    if (!res.ok) throw new Error(`Không tải được tuỳ chọn (HTTP ${res.status})`);
+    const data = (await res.json()) as Partial<MenuOptions>;
+    return {
+      sizes: data.sizes?.length ? data.sizes : SIZES,
+      toppings: data.toppings ?? TOPPINGS,
+    };
+  }
+  return { sizes: SIZES, toppings: TOPPINGS };
+}
 export interface PayOrderInput {
   orderId: number;
   amount: number;
@@ -258,7 +272,7 @@ export interface PayOrderResult {
   message: string;
   order: Order | null;
   /** Điểm tích lũy được cộng cho đơn (0 nếu không có) */
-  loyaltyPointsAwarded: number;
+  loyaltyPointsAwarded?: number;
   /** Trạng thái đơn sau khi cố gắng thanh toán */
   orderStatus?: OrderStatus;
   /** Giao dịch mà API trả về (dùng để hiển thị phương thức đã trả) */
@@ -274,10 +288,12 @@ export interface PayOrderResult {
 /** Tạo đơn. Trả về đơn đã được chuẩn hoá theo kiểu Order của frontend. */
 export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
   if (API_URL) {
-    const res = await fetch(`${API_URL}/orders`, {
+    // Đã đăng nhập: gắn token + userId để đơn được liên kết với tài khoản (và tích điểm)
+    const user = getSessionUser();
+    const res = await authFetch(`${API_URL}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(user ? { ...payload, userId: user.id } : payload),
     });
     if (!res.ok) throw new Error(await readApiError(res, "Không tạo được đơn hàng"));
     const data = (await res.json()) as { order: ApiOrder };
@@ -309,7 +325,9 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
 /** Danh sách đơn hàng, mới nhất trước. */
 export async function getOrders(): Promise<Order[]> {
   if (API_URL) {
-    const res = await fetch(`${API_URL}/orders`);
+    // Đã đăng nhập: chỉ lấy đơn của tài khoản này
+    const user = getSessionUser();
+    const res = await authFetch(`${API_URL}/orders${user ? `?userId=${user.id}` : ""}`);
     if (!res.ok) throw new Error(`Không tải được lịch sử đơn (HTTP ${res.status})`);
     const data = (await res.json()) as ApiOrder[];
     return data.map(mapApiOrder);
@@ -321,7 +339,7 @@ export async function getOrders(): Promise<Order[]> {
 /** Chi tiết một đơn. */
 export async function getOrder(id: number): Promise<Order> {
   if (API_URL) {
-    const res = await fetch(`${API_URL}/orders/${id}`);
+    const res = await authFetch(`${API_URL}/orders/${id}`);
     if (res.status === 404) throw new Error("Không tìm thấy đơn hàng");
     if (!res.ok) throw new Error(`Không tải được đơn hàng (HTTP ${res.status})`);
     return mapApiOrder((await res.json()) as ApiOrder);
@@ -338,7 +356,7 @@ export async function getOrder(id: number): Promise<Order> {
  */
 export async function payOrder(input: PayOrderInput): Promise<PayOrderResult> {
   if (API_URL) {
-    const res = await fetch(`${API_URL}/payments`, {
+    const res = await authFetch(`${API_URL}/payments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
