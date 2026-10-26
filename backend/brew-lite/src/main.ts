@@ -14,7 +14,7 @@ async function bootstrap() {
   app.enableCors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000' });
 
   const port = Number(process.env.PORT ?? 4000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`🚀 BrewLite Backend đang chạy tại: http://localhost:${port}`);
 }
 void bootstrap();
