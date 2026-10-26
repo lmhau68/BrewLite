@@ -34,6 +34,7 @@ import { OrderLines, type DisplayLine } from "./OrderLines";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { useOrders } from "./OrdersProvider";
 import { SubPageHeader } from "./SubPageHeader";
+import { clearGuestData } from "@/lib/api";
 
 /** 3 bước: nhập thông tin → chọn cách thanh toán → xác nhận kết quả */
 type Step = "form" | "payment" | "done";
@@ -49,7 +50,7 @@ const labelClass = "mb-1 block text-sm font-semibold text-espresso";
  */
 export function CheckoutScreen() {
   const { lines, count, total, dispatch } = useCart();
-  const { placeOrder, pay } = useOrders();
+  const { placeOrder, pay, refresh } = useOrders();
   const { user } = useAuth();
 
   const [step, setStep] = useState<Step>("form");
@@ -187,6 +188,10 @@ const created = await placeOrder(buildOrderPayload(lines, form, promotionCode));
 // API đã ghi nhận thanh toán: xoá giỏ hàng ngay để đơn sau không dính món cũ.
         // Việc này luôn thực hiện, kể cả khi người dùng đã rời trang, vì server đã trừ món.
         dispatch({ type: "clear" });
+        if (!user) {
+          clearGuestData(); 
+          void refresh();
+        }
         // Đã rời trang trong lúc chờ API: bỏ qua cập nhật giao diện.
         if (sessionRef.current !== session) return;
         // Cập nhật trạng thái + điểm tích lũy ngay.
@@ -197,11 +202,11 @@ const created = await placeOrder(buildOrderPayload(lines, form, promotionCode));
                 ? {
                     ...prev,
                     status: result.orderStatus ?? "PAID",
-                    loyaltyPointsAwarded: result.loyaltyPointsAwarded,
+                    loyaltyPointsAwarded: user ? result.loyaltyPointsAwarded : 0,
                   }
                 : prev),
         );
-        setPointsAwarded(result.loyaltyPointsAwarded ?? 0);
+        setPointsAwarded(user ? (result.loyaltyPointsAwarded ?? 0) : 0);
         setStep("done");
       } else {
         // Cập nhật trạng thái đơn (ví dụ PAYMENT_FAILED) để badge hiển thị đúng
@@ -617,18 +622,16 @@ const created = await placeOrder(buildOrderPayload(lines, form, promotionCode));
             </div>
             <OrderStatusBadge status={order.status} />
             <div className="mt-1 flex w-full flex-col gap-2">
-              <Link
-                href={`/orders/${order.id}`}
-                className="rounded-full bg-espresso py-3 font-semibold text-cream hover:bg-caramel-dark"
-              >
-                Theo dõi đơn hàng
-              </Link>
-              <Link
-                href="/orders"
-                className="rounded-full border border-line py-2.5 text-sm font-medium text-espresso hover:bg-cream"
-              >
-                Lịch sử đơn hàng
-              </Link>
+              {user && (
+                <>
+                  <Link href={`/orders/${order.id}`} className="rounded-full bg-espresso py-3 font-semibold text-cream hover:bg-caramel-dark">
+                    Theo dõi đơn hàng
+                  </Link>
+                  <Link href="/orders" className="rounded-full border border-line py-2.5 text-sm font-medium text-espresso hover:bg-cream">
+                    Lịch sử đơn hàng
+                  </Link>
+                </>
+              )}
               <Link href="/" className="text-sm text-muted underline hover:text-espresso">
                 Đặt thêm món
               </Link>
