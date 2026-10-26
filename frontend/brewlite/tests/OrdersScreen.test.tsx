@@ -1,17 +1,19 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrderDetailScreen } from "@/components/OrderDetailScreen";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import { OrdersScreen } from "@/components/OrdersScreen";
-import type { Order } from "@/lib/types";
+import type { CartLine, Order } from "@/lib/types";
 import { AuthProvider } from "@/components/AuthProvider";
+import { CartProvider, useCart } from "@/components/CartProvider";
 
 vi.mock("@/lib/api", () => ({
   createOrder: vi.fn(),
   payOrder: vi.fn(),
   getOrders: vi.fn(),
   getOrder: vi.fn(),
+  clearGuestData: vi.fn(),
 }));
 import { getOrder, getOrders, payOrder } from "@/lib/api";
 
@@ -45,10 +47,35 @@ function makeOrder(over: Partial<Order> = {}): Order {
 const orderA = makeOrder({ id: 1, total: 86000, createdAt: "2026-10-23T02:35:00.000Z" });
 const orderB = makeOrder({ id: 2, status: "PENDING", total: 35000, createdAt: "2026-10-24T09:00:00.000Z" });
 
+/** Giỏ hàng còn sót lại của đơn #2 (2 ly size M + trân châu đen). */
+const cartLine: CartLine = {
+  key: "1|M|pearl",
+  productId: 1,
+  name: "Cà phê sữa đá",
+  emoji: "☕",
+  size: "M",
+  toppings: [{ id: "pearl", name: "Trân châu đen", price: 8000 }],
+  qty: 2,
+  unitPrice: 43000,
+  basePrice: 29000,
+  customizable: true,
+};
+
+/** Hiển thị số lượng trong giỏ để kiểm tra giỏ có được dọn hay không. */
+function CartCountProbe() {
+  const { count } = useCart();
+  return <span data-testid="cart-count">{count}</span>;
+}
+
 function renderWithOrders(ui: React.ReactElement) {
   return render(
     <AuthProvider>
-      <OrdersProvider>{ui}</OrdersProvider>
+      <CartProvider>
+        <OrdersProvider>
+          <CartCountProbe />
+          {ui}
+        </OrdersProvider>
+      </CartProvider>
     </AuthProvider>,
   );
 }
@@ -139,5 +166,67 @@ describe("OrderDetailScreen - chi tiết đơn", () => {
     expect(mockedPayOrder).toHaveBeenCalledTimes(1);
     expect(mockedPayOrder.mock.calls[0][0]).toMatchObject({ orderId: 2, amount: 35000 });
     expect(await screen.findByText("Đã thanh toán")).toBeInTheDocument();
+  });
+
+  it("xoá món đã thanh toán khỏi giỏ hàng", async () => {
+    // Giỏ hàng còn sót lại sau khi tải lại trang ở bước thanh toán
+    localStorage.setItem("brewlite.cart.v1", JSON.stringify([cartLine]));
+    mockedPayOrder.mockResolvedValue({ success: true, message: "Thanh toán thành công", order: null, loyaltyPointsAwarded: 0 });
+    mockedGetOrder.mockResolvedValueOnce(orderB).mockResolvedValue({ ...orderB, status: "PAID" });
+    const user = userEvent.setup();
+    renderWithOrders(<OrderDetailScreen id={2} />);
+
+    await waitFor(() => expect(screen.getByTestId("cart-count")).toHaveTextContent("2"));
+
+    await user.click(await screen.findByRole("button", { name: /Thanh toán 35\.000đ/ }));
+
+    await waitFor(() => expect(screen.getByTestId("cart-count")).toHaveTextContent("0"));
+    expect(await screen.findByText("Đã thanh toán")).toBeInTheDocument();
+    // Giỏ đã được ghi xuống localStorage
+    expect(JSON.parse(localStorage.getItem("brewlite.cart.v1") ?? "[]")).toEqual([]);
+  });
+
+  it("giữ món thêm sau khi đặt đơn khi thanh toán đơn cũ", async () => {
+    const extra: CartLine = {
+      ...cartLine,
+      key: "1|L|",
+      size: "L",
+      toppings: [],
+      qty: 1,
+      unitPrice: 39000,
+    };
+    localStorage.setItem("brewlite.cart.v1", JSON.stringify([cartLine, extra]));
+    mockedPayOrder.mockResolvedValue({ success: true, message: "Thanh toán thành công", order: null, loyaltyPointsAwarded: 0 });
+    mockedGetOrder.mockResolvedValueOnce(orderB).mockResolvedValue({ ...orderB, status: "PAID" });
+    const user = userEvent.setup();
+    renderWithOrders(<OrderDetailScreen id={2} />);
+
+    await waitFor(() => expect(screen.getByTestId("cart-count")).toHaveTextContent("3"));
+
+    await user.click(await screen.findByRole("button", { name: /Thanh toán 35\.000đ/ }));
+
+    // Chỉ 2 ly của đơn #2 bị gỡ, ly size L thêm sau đó vẫn còn
+    await waitFor(() => expect(screen.getByTestId("cart-count")).toHaveTextContent("1"));
+  });
+
+  it("không đụng vào giỏ hàng khi thanh toán thất bại", async () => {
+    localStorage.setItem("brewlite.cart.v1", JSON.stringify([cartLine]));
+    mockedPayOrder.mockResolvedValue({
+      success: false,
+      message: "Thẻ bị từ chối",
+      order: null,
+      loyaltyPointsAwarded: 0,
+      orderStatus: "PAYMENT_FAILED",
+    });
+    mockedGetOrder.mockResolvedValue(orderB);
+    const user = userEvent.setup();
+    renderWithOrders(<OrderDetailScreen id={2} />);
+
+    await waitFor(() => expect(screen.getByTestId("cart-count")).toHaveTextContent("2"));
+
+    await user.click(await screen.findByRole("button", { name: /Thanh toán 35\.000đ/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Thẻ bị từ chối");
+    expect(screen.getByTestId("cart-count")).toHaveTextContent("2");
   });
 });

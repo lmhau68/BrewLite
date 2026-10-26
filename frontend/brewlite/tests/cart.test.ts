@@ -3,6 +3,7 @@ import {
   cartCount,
   cartReducer,
   cartTotal,
+  consumedItemsFromOrder,
   deriveBasePrice,
   normalizeLine,
   unitPriceOf,
@@ -139,8 +140,7 @@ describe("cartReducer - sửa size/topping trong giỏ", () => {
   });
 });
 
-describe("giỏ hàng lưu từ trước (chưa có basePrice)", () => {
-  it("khôi phục được giá gốc để sửa size/topping", () => {
+describe("giỏ hàng lưu từ trước (chưa có basePrice)", () => {  it("khôi phục được giá gốc để sửa size/topping", () => {
     const legacy: CartLine = {
       key: "1|M|pearl",
       productId: 1,
@@ -164,5 +164,63 @@ describe("giỏ hàng lưu từ trước (chưa có basePrice)", () => {
       toppings: [],
     });
     expect(updated[0].unitPrice).toBe(39000);
+  });
+});
+
+describe("gỡ món đã thanh toán khỏi giỏ hàng", () => {
+  const add = (state: CartLine[], size: "S" | "M" | "L" = "S", qty = 1, toppings = [pearl]) =>
+    cartReducer(state, { type: "add", product: coffee, size, toppings, qty });
+
+  /** Đơn mẫu: 1 ly size S + trân châu đen */
+  const order = {
+    items: [
+      {
+        productId: 1,
+        name: "Cà phê sữa đá",
+        emoji: "☕",
+        size: "S" as const,
+        toppings: [pearl],
+        qty: 1,
+        unitPrice: 37000,
+        lineTotal: 37000,
+      },
+    ],
+  };
+
+  it("dựng khoá dòng từ dữ liệu đơn để khớp với giỏ hàng", () => {
+    expect(consumedItemsFromOrder(order)).toEqual([{ key: "1|S|pearl", qty: 1 }]);
+  });
+
+  it("xoá hẳn dòng khi giỏ trùng hệt đơn", () => {
+    const s = add([], "S", 1);
+    const next = cartReducer(s, { type: "consume", items: consumedItemsFromOrder(order) });
+    expect(next).toEqual([]);
+    expect(cartCount(next)).toBe(0);
+  });
+
+  it("trừ đúng số lượng đã thanh toán, phần dư vẫn còn", () => {
+    const s = add([], "S", 3);
+    const next = cartReducer(s, { type: "consume", items: consumedItemsFromOrder(order) });
+    expect(next).toHaveLength(1);
+    expect(next[0].qty).toBe(2);
+  });
+
+  it("giữ nguyên món không thuộc đơn (thêm sau khi đặt đơn)", () => {
+    const s = add(add([], "S", 1), "M", 1);
+    const next = cartReducer(s, { type: "consume", items: consumedItemsFromOrder(order) });
+    expect(next).toHaveLength(1);
+    expect(next[0].size).toBe("M");
+  });
+
+  it("không làm gì khi đơn không có món nào khớp", () => {
+    const s = add([], "M", 1); // size M - khác đơn (size S)
+    const next = cartReducer(s, { type: "consume", items: consumedItemsFromOrder(order) });
+    expect(next).toHaveLength(1);
+    expect(next[0].qty).toBe(1);
+  });
+
+  it("không đổi giỏ khi không có món nào được gỡ", () => {
+    const s = add([], "S", 1);
+    expect(cartReducer(s, { type: "consume", items: [] })).toEqual(s);
   });
 });

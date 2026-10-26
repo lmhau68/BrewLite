@@ -1,5 +1,5 @@
 import { SIZES, TOPPINGS } from "./menu-options";
-import type { CartLine, Product, SizeId, SizeOption, ToppingOption } from "./types";
+import type { CartLine, Order, Product, SizeId, SizeOption, ToppingOption } from "./types";
 
 export function unitPriceFromBase(
   basePrice: number,
@@ -22,6 +22,26 @@ export function unitPriceOf(
 
 export function lineKey(productId: number, size: SizeId, toppings: ToppingOption[]): string {
   return `${productId}|${size}|${toppings.map((t) => t.id).sort().join(",")}`;
+}
+
+/** Một món cần gỡ khỏi giỏ hàng: khoá dòng + số lượng bị dùng. */
+export interface ConsumedItem {
+  key: string;
+  qty: number;
+}
+
+/**
+ * Chuyển món của một đơn thành danh sách cần gỡ khỏi giỏ hàng.
+ *
+ * Khoá dòng được dựng lại từ chính dữ liệu của đơn (productId + size + topping)
+ * chứ không phụ thuộc vào state trong bộ nhớ, nên vẫn khớp với giỏ hàng sau
+ * khi người dùng tải lại trang.
+ */
+export function consumedItemsFromOrder(order: Pick<Order, "items">): ConsumedItem[] {
+  return order.items.map((item) => ({
+    key: lineKey(item.productId, item.size, Array.isArray(item.toppings) ? item.toppings : []),
+    qty: item.qty,
+  }));
 }
 
 /** Sắp xếp topping theo thứ tự trong catalog để hiển thị ổn định. */
@@ -75,6 +95,8 @@ export type CartAction =
   | { type: "remove"; key: string }
   /** Sửa size/topping của một dòng đã có trong giỏ */
   | { type: "update"; key: string; size: SizeId; toppings: ToppingOption[] }
+  /** Gỡ đúng số lượng vừa thanh toán khỏi giỏ hàng */
+  | { type: "consume"; items: ConsumedItem[] }
   | { type: "clear" }
   | { type: "hydrate"; lines: CartLine[] };
 
@@ -151,6 +173,26 @@ unitPrice: action.unitPrice ?? unitPriceOf(action.product, action.size, action.t
           ? { ...current, key: newKey, size: action.size, toppings, unitPrice, basePrice }
           : l,
       );
+    }
+    case "consume": {
+      if (action.items.length === 0) return state;
+      // Cộng dồn phòng khi một đơn có hai dòng trùng cấu hình.
+      const used = new Map<string, number>();
+      for (const item of action.items) {
+        used.set(item.key, (used.get(item.key) ?? 0) + item.qty);
+      }
+      const next: CartLine[] = [];
+      for (const line of state) {
+        const consumed = used.get(line.key);
+        // Dòng không thuộc đơn vừa thanh toán (món thêm sau khi đặt đơn) -> giữ nguyên.
+        if (!consumed) {
+          next.push(line);
+          continue;
+        }
+        const qty = line.qty - consumed;
+        if (qty > 0) next.push({ ...line, qty });
+      }
+      return next;
     }
     case "clear":
       return [];
