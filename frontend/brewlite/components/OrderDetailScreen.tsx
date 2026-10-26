@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatVND } from "@/lib/format";
+import { consumedItemsFromOrder } from "@/lib/cart";
 import {
   createIdempotencyKey,
   formatCustomerLine,
@@ -13,6 +14,9 @@ import {
   PAYMENT_METHOD_LABEL,
 } from "@/lib/orders";
 import type { Order, PaymentMethod } from "@/lib/types";
+import { clearGuestData } from "@/lib/api";
+import { useAuth } from "./AuthProvider";
+import { useCart } from "./CartProvider";
 import { OrderLines, type DisplayLine } from "./OrderLines";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { useOrders } from "./OrdersProvider";
@@ -22,6 +26,8 @@ type Status = "loading" | "error" | "ready";
 
 export function OrderDetailScreen({ id }: { id: number }) {
   const { loadOrder, pay } = useOrders();
+  const { dispatch } = useCart();
+  const { user } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState("");
@@ -78,8 +84,20 @@ export function OrderDetailScreen({ id }: { id: number }) {
     try {
       const result = await pay(order, method, idemKey, !mockFail);
       if (result.success) {
-        setOrder(result.order ?? order);
-        setPointsAwarded(result.loyaltyPointsAwarded ?? 0);
+        // Server đã trừ món: gỡ đúng số lượng vừa thanh toán khỏi giỏ hàng.
+        // Đơn trong lịch sử có thể đã cũ hơn giỏ hiện tại, nên chỉ gỡ đúng phần
+        // trùng với đơn; món người dùng thêm sau khi đặt đơn thì giữ nguyên.
+        dispatch({ type: "consume", items: consumedItemsFromOrder(order) });
+        // Khách vãng lai: dọn đơn lưu cục bộ sau khi thanh toán (yêu cầu riêng tư).
+        if (!user) clearGuestData();
+        setOrder(
+          result.order ?? {
+            ...order,
+            status: result.orderStatus ?? "PAID",
+            loyaltyPointsAwarded: result.loyaltyPointsAwarded ?? order.loyaltyPointsAwarded ?? 0,
+          },
+        );
+        setPointsAwarded(result.loyaltyPointsAwarded ?? order.loyaltyPointsAwarded ?? 0);
       } else {
         setPayError(result.message || "Thanh toán không thành công.");
         // Lần thử sau phải dùng khoá mới: API từ chối tái sử dụng khoá cũ

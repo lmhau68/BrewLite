@@ -15,6 +15,12 @@ thiếu hoặc sai định dạng thì báo lỗi ngay dưới từng ô và **k
 `lib/card.ts`). Dữ liệu thẻ chỉ nằm ở giao diện, không gửi lên máy chủ; nút "Điền thẻ demo" điền sẵn một thẻ
 ảo hợp lệ để thử nhanh.
 
+Sau khi thanh toán thành công, món vừa mua được gỡ khỏi giỏ hàng — kể cả khi thanh toán được thực hiện từ
+trang **chi tiết đơn** (`/orders/[id]`) chứ không phải từ `/checkout`. Khoá dòng được dựng lại từ dữ liệu
+đơn (`productId` + `size` + `topping`) nên vẫn khớp sau khi tải lại trang. Chỉ phần trùng với đơn bị gỡ;
+món người dùng thêm sau khi đặt đơn thì giữ nguyên. Nếu thanh toán **thất bại** thì giỏ hàng giữ nguyên
+(đúng US-05). Với khách vãng lai, dữ liệu đơn lưu cục bộ cũng bị xoá ngay sau khi thanh toán thành công.
+
 ## Chạy local
 
 ```bash
