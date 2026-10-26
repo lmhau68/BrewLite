@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   db:
     image: postgres:15
@@ -9,4 +10,36 @@ services:
       POSTGRES_DB: brewlite
     ports:
       - "5432:5432"
-    restart: always
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./backend/brew-lite
+    container_name: brewlite_api
+    ports:
+      - "4000:4000"
+    environment:
+      # Cắm cáp kết nối từ API qua DB (dùng tên service 'db' làm host)
+      DATABASE_URL: "postgresql://root:123@db:5432/brewlite?schema=public"
+      PORT: 4000
+      CORS_ORIGIN: "http://localhost:3000"
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: ./frontend/brewlite
+    container_name: brewlite_web
+    ports:
+      - "3000:3000"
+    environment:
+    # URL này sẽ được nạp vào trình duyệt để Client gọi API từ bên ngoài
+      NEXT_PUBLIC_API_URL: "http://localhost:4000"
+    # URL này dành cho Next.js Server gọi API nội bộ (nếu ông có dùng SSR)
+      API_URL: "http://api:4000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
