@@ -1,102 +1,73 @@
-# BrewLite – Công nghệ Phần mềm (Assignment 2)
+# ☕ BrewLite - Hệ thống Đặt Cà phê Không tiền mặt
 
-Ứng dụng đặt đồ uống mobile-first: **Xem menu → Chọn tùy chọn → Giỏ hàng → Đặt đơn → Thanh toán → Theo dõi đơn**.
-Công nghệ: Next.js (PWA) · NestJS · PostgreSQL · Docker.
+BrewLite là một ứng dụng đặt đồ uống trực tuyến tối giản (Minimum Viable Product - MVP) được xây dựng theo quy trình phát triển **Agile Scrum**. Hệ thống giúp khách hàng duyệt thực đơn, tùy chỉnh đồ uống, quản lý giỏ hàng và thanh toán không tiền mặt một cách nhanh chóng.
 
-## Cấu trúc repository
+Dự án này là bài tập lớn môn **Công nghệ Phần mềm**, thể hiện việc áp dụng các nguyên lý thiết kế phần mềm, quản lý vòng đời dự án (SDLC) và tự động hóa triển khai (DevOps).
 
-| Thư mục | Nội dung | Tương ứng đề bài |
-|---|---|---|
-| `frontend/brewlite` | Next.js mobile-first/PWA | `apps/web` |
-| `backend/brew-lite` | NestJS API | `apps/api` |
-| `backend/prisma` | Schema PostgreSQL (Prisma) | – |
-| `docs/` | Yêu cầu, sơ đồ, kiến trúc + ADR, truy vết | `docs/` |
-| `tests/` | Integration/E2E (Task 5) | `tests/` |
-| `.github/workflows` | CI (Task 4.4), CD (Task 5) | `.github/workflows` |
+---
 
-## Trạng thái Sprint 1
+## 🏗️ Kiến trúc Hệ thống (Architecture)
 
-| Hạng mục | Trạng thái |
-|---|---|
-| `GET /products`, `GET /products/:id`, `GET /health` | ✅ |
-| Màn hình menu (tìm kiếm, danh mục, chi tiết + size/topping, giỏ hàng) | ✅ |
-| Trạng thái loading / empty / error | ✅ |
-| Dữ liệu mẫu (frontend mock + API seed) | ✅ |
-| Unit/component test, CI (Install → Lint → Test → Build) | ✅ |
-| Xác nhận đơn (`/checkout`): thông tin người nhận → tạo đơn → thanh toán mô phỏng | ✅ |
-| Theo dõi đơn (`/orders`, `/orders/[id]`): lịch sử, chi tiết, thanh toán lại | ✅ |
-| Đồng bộ hợp đồng API: giá theo size/topping, lưu thông tin người nhận, trả điểm tích lũy | ✅ |
-| Đăng nhập / JWT | Sprint 2 |
+Hệ thống được thiết kế theo mô hình phân tán Client-Server, lưu trữ theo kiến trúc Monorepo và được ảo hóa toàn bộ bằng Docker.
 
-> Các màn hình `/checkout` và `/orders` chạy được bằng dữ liệu giả (không cần API). Khi bật `NEXT_PUBLIC_API_URL`, giao diện gọi `POST /orders`, `GET /orders`, `GET /orders/:id`, `POST /payments`.
->
-> **Hợp đồng API (đã đồng bộ hai chiều):**
->
-> - `GET /products` trả kèm `description`, `category`, `emoji`, `customizable`, `bestSeller` — giao diện dựng được lưới menu, lọc danh mục và màn chọn size/topping.
-> - `POST /orders` nhận `customerName`, `customerPhone`, `address`, `note`, `promotionCode` và `items[].toppings[].id`. **Server tự tính giá** theo bảng size/topping (client không gửi giá) và trả về `unitPrice`/`lineTotal` cho từng dòng.
-> - `POST /payments` trả `orderStatus` và `loyaltyPointsAwarded` để màn "Đặt đơn xong" hiển thị điểm tích lũy.
-> - Mỗi lần thanh toán dùng một `idempotencyKey` riêng; lần thử sau sau khi thất bại sẽ sinh khoá mới (API từ chối tái sử dụng khoá cũ cho yêu cầu khác — ADR-005).
+*   **Frontend:** Next.js (React, TypeScript), Tailwind CSS, Zustand (Quản lý trạng thái giỏ hàng). Chạy trên cổng `3000`.
+*   **Backend:** NestJS (TypeScript), RESTful API, Class-validator, Passport (JWT Auth). Chạy trên cổng `4000`.
+*   **Database:** PostgreSQL giao tiếp thông qua Prisma ORM. Chạy ngầm trên cổng `5432`.
+*   **DevOps:** Docker & Docker Compose để quản lý cấu hình và triển khai tự động.
 
-## Chạy local (VS Code)
+---
 
-Yêu cầu: **Node.js ≥ 20** (khuyến nghị 22) và npm.
+## ✨ Các tính năng cốt lõi (Features)
 
-### Cách 1 – Chỉ frontend (dữ liệu giả, nhanh nhất)
+*   **Duyệt Thực Đơn & Tùy Chỉnh:** Xem danh sách đồ uống, chọn kích cỡ (S/M/L) và thêm Topping. Giá tiền được cập nhật theo thời gian thực.
+*   **Quản Lý Giỏ Hàng:** Lưu trữ cục bộ trạng thái đơn hàng. Tự động dọn dẹp bộ đệm đối với khách vãng lai sau khi thanh toán để bảo vệ dữ liệu riêng tư.
+*   **Xác Thực & Phân Quyền (JWT):** Đăng ký, đăng nhập an toàn với mật khẩu được băm (bcrypt).
+*   **Mô Phỏng Thanh Toán (Idempotency):** Cổng thanh toán giả lập với cơ chế chống thanh toán trùng lặp (Idempotent Key).
+*   **Máy Trạng Thái Đơn Hàng (Order State Machine):** Quản lý vòng đời đơn hàng chặt chẽ (`PENDING` -> `PAID` / `PAYMENT_FAILED`).
+*   **Hệ Thống Tích Điểm (Loyalty):** Tự động cấp phát điểm thưởng cho khách hàng có tài khoản sau khi giao dịch thành công.
+
+---
+
+## 🚀 Hướng dẫn Cài đặt & Khởi chạy (Getting Started)
+
+Dự án đã được tích hợp Kế hoạch Quản lý Cấu hình tự động. Bạn **không cần** cài đặt Node.js hay cấu hình cơ sở dữ liệu thủ công. 
+
+### 1. Yêu cầu hệ thống (Prerequisites)
+*   Đã cài đặt và đang bật **[Docker Desktop](https://www.docker.com/products/docker-desktop)**.
+*   Đã cài đặt **Git**.
+
+### 2. Triển khai hệ thống (Deployment)
+Mở Terminal/Command Prompt, clone dự án về và chạy đúng 1 lệnh duy nhất:
 
 ```bash
-cd frontend/brewlite
-npm install
-npm run dev          # http://localhost:3000
+# 1. Clone mã nguồn
+git clone https://github.com/your-username/BrewLite.git
+cd BrewLite
+
+# 2. Kích hoạt toàn bộ hệ thống (Frontend, Backend, Database)
+docker-compose up --build -d
 ```
 
-Xem thử các trạng thái: `http://localhost:3000/?state=error` và `?state=empty`.
+*(Lưu ý: Trong lần chạy đầu tiên, hệ thống sẽ tự động đồng bộ cấu trúc bảng (Migration) và nạp dữ liệu menu cà phê mẫu (Seeding) vào cơ sở dữ liệu).*
 
-Các màn hình chính: `/` (menu), `/checkout` (xác nhận đơn + thanh toán), `/orders` (lịch sử đơn), `/orders/[id]` (chi tiết đơn).
+### 3. Truy cập Ứng dụng
+Sau khi lệnh chạy hoàn tất và các container báo `Started`, hãy mở trình duyệt và truy cập:
 
-### Cách 2 – Frontend + API thật
+*   🌐 **Giao diện Khách hàng (Frontend):** [http://localhost:3000](http://localhost:3000)
+*   ⚙️ **API Gateway (Backend):** [http://localhost:4000](http://localhost:4000)
 
-Terminal 1 – API:
-
+### 4. Tạm dừng Hệ thống
+Để dừng các container mà không xóa dữ liệu cơ sở dữ liệu, hãy gõ:
 ```bash
-cd backend/brew-lite
-npm install
-npm run start:dev    # http://localhost:4000  (thử: /health, /products, /products/1)
+docker-compose stop
 ```
-
-Terminal 2 – Web:
-
+Để gỡ bỏ toàn bộ mạng ảo và container:
 ```bash
-cd frontend/brewlite
-echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > .env.local
-npm install
-npm run dev
+docker-compose down
 ```
 
-### API
+---
 
-| Method | Đường dẫn | Mô tả |
-|---|---|---|
-| GET | `/products` | Danh sách; tuỳ chọn `?category=coffee\|tea\|milk-tea\|blended&q=từ khoá` |
-| GET | `/products/:id` | Chi tiết; `400` nếu id không phải số, `404` nếu không tồn tại |
-| GET | `/health` | Kiểm tra sống |
+## 👥 Về Đội ngũ Phát triển
 
-### Lint, test, build
-
-```bash
-# trong frontend/brewlite hoặc backend/brew-lite
-npm run lint
-npm test
-npm run build
-# chỉ backend: npm run test:e2e
-```
-
-### Database (từ Sprint 2)
-
-```bash
-docker compose up -d db        # PostgreSQL 15 tại localhost:5432
-cd backend && npm install && npx prisma db push
-```
-
-## Quy trình làm việc
-
-Xem [`CONTRIBUTING.md`](./CONTRIBUTING.md) (branch, PR, commit, Definition of Done) và [`docs/`](./docs).
+Dự án được xây dựng và phát triển thông qua 3 Sprints theo khung làm việc Scrum, tập trung vào việc chuyển giao liên tục các giá trị cốt lõi cho người dùng (Incremental Delivery).
